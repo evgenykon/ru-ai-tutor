@@ -13,10 +13,13 @@
       </thead>
       <tbody>
         <tr v-for="user in users" :key="user.id">
-          <td>{{ user.email }}</td>
+          <td><NuxtLink :to="`/users/${user.id}`" class="user-link">{{ user.email }}</NuxtLink></td>
           <td>{{ user.name || '—' }}</td>
           <td>{{ user.active ? 'Активен' : 'Отключён' }}</td>
           <td>{{ new Date(user.createdAt).toLocaleDateString() }}</td>
+        </tr>
+        <tr v-if="!users.length">
+          <td colspan="4" class="empty">Нет пользователей</td>
         </tr>
       </tbody>
     </table>
@@ -62,4 +65,9 @@ th {
 td {
   color: #4b5563;
 }
+
+td .empty { text-align: center; color: #9ca3af; padding: 2rem !important; }
+
+.user-link { color: #2563eb; text-decoration: none; }
+.user-link:hover { text-decoration: underline; }
 </style>

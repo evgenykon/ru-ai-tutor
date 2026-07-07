@@ -6,15 +6,18 @@ export async function list(request: FastifyRequest) {
   const page = Math.max(1, parseInt(query.page || '1', 10))
   const limit = Math.min(100, Math.max(1, parseInt(query.limit || '20', 10)))
   const skip = (page - 1) * limit
+  const isAdmin = request.user!.email === 'admin@admin.com'
 
-  const userCourseIds = await prisma.userCourse.findMany({
-    where: { userId: request.user!.userId },
-    select: { courseId: true },
-  }).then(r => r.map(uc => uc.courseId))
+  let where: any = {}
+  if (!isAdmin) {
+    const userCourseIds = await prisma.userCourse.findMany({
+      where: { userId: request.user!.userId },
+      select: { courseId: true },
+    }).then(r => r.map(uc => uc.courseId))
+    if (!userCourseIds.length) return { courses: [], total: 0, page, limit }
+    where.id = { in: userCourseIds }
+  }
 
-  if (!userCourseIds.length) return { courses: [], total: 0, page, limit }
-
-  const where: any = { id: { in: userCourseIds } }
   if (query.archived === 'true') where.archived = true
   else if (query.archived === 'all') {}
   else where.archived = false
@@ -25,7 +28,12 @@ export async function list(request: FastifyRequest) {
   if (query.q) where.name = { contains: query.q, mode: 'insensitive' }
 
   const [courses, total] = await Promise.all([
-    prisma.course.findMany({ where, orderBy: { createdAt: 'desc' }, skip, take: limit }),
+    prisma.course.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      skip, take: limit,
+      include: { users: { include: { user: { select: { id: true, name: true, email: true } } } } },
+    }),
     prisma.course.count({ where }),
   ])
   return { courses, total, page, limit }
@@ -33,8 +41,11 @@ export async function list(request: FastifyRequest) {
 
 export async function getById(request: FastifyRequest, reply: FastifyReply) {
   const { id } = request.params as { id: string }
+  const isAdmin = request.user!.email === 'admin@admin.com'
+  const where: any = { id }
+  if (!isAdmin) where.users = { some: { userId: request.user!.userId } }
   const item = await prisma.course.findFirst({
-    where: { id, users: { some: { userId: request.user!.userId } } },
+    where,
     include: {
       modules: { orderBy: { order: 'asc' }, include: { lessons: { orderBy: { order: 'asc' } } } },
       assistant: true,
@@ -73,7 +84,8 @@ export async function update(request: FastifyRequest, reply: FastifyReply) {
     assistantId?: string | null; archived?: boolean
   }
 
-  const existing = await prisma.course.findFirst({ where: { id, users: { some: { userId: request.user!.userId } } } })
+  const isAdmin = request.user!.email === 'admin@admin.com'
+  const existing = await prisma.course.findFirst({ where: { id, ...(isAdmin ? {} : { users: { some: { userId: request.user!.userId } } }) } })
   if (!existing) return reply.status(404).send({ error: 'Not found' })
 
   const effectiveActive = body.active !== undefined ? body.active : existing.active
@@ -115,7 +127,8 @@ export async function checkSlug(request: FastifyRequest) {
 
 export async function remove(request: FastifyRequest, reply: FastifyReply) {
   const { id } = request.params as { id: string }
-  const existing = await prisma.course.findFirst({ where: { id, users: { some: { userId: request.user!.userId } } } })
+  const isAdmin = request.user!.email === 'admin@admin.com'
+  const existing = await prisma.course.findFirst({ where: { id, ...(isAdmin ? {} : { users: { some: { userId: request.user!.userId } } }) } })
   if (!existing) return reply.status(404).send({ error: 'Not found' })
   await prisma.course.delete({ where: { id } })
   return { success: true }

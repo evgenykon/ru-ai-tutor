@@ -2,7 +2,14 @@
   <div>
     <div class="header">
       <h1>Курсы</h1>
-      <button @click="openCreate">+ Создать</button>
+      <div v-if="!showCreate" class="header-actions">
+        <button @click="showCreate = true" class="create-btn">+ Создать</button>
+      </div>
+      <div v-else class="create-form">
+        <input v-model="newName" placeholder="Название курса" @keyup.enter="createCourse" class="create-input" ref="nameInput" />
+        <button @click="createCourse" class="create-btn">Создать</button>
+        <button @click="cancelCreate" class="cancel-btn">Отмена</button>
+      </div>
     </div>
 
     <input v-model="search" placeholder="Поиск по названию..." class="search-input" />
@@ -15,6 +22,7 @@
       <thead>
         <tr>
           <th>Название</th>
+          <th>Автор</th>
           <th>Описание</th>
           <th>Статус</th>
           <th>Создан</th>
@@ -24,6 +32,7 @@
       <tbody>
         <tr v-for="item in items" :key="item.id">
           <td>{{ item.name }}</td>
+          <td class="author">{{ item.users?.[0]?.user?.name || item.users?.[0]?.user?.email || '—' }}</td>
           <td>{{ item.description || '—' }}</td>
           <td>
             <span v-if="item.archived" class="badge badge-archived">Архив</span>
@@ -42,7 +51,7 @@
           </td>
         </tr>
         <tr v-if="!items.length">
-          <td colspan="5" class="empty">Нет курсов</td>
+          <td colspan="6" class="empty">Нет курсов</td>
         </tr>
       </tbody>
     </table>
@@ -67,6 +76,9 @@ const total = ref(0)
 const limit = 20
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / limit)))
 const search = ref('')
+const showCreate = ref(false)
+const newName = ref('')
+const nameInput = ref<HTMLInputElement | null>(null)
 let searchTimer: ReturnType<typeof setTimeout> | null = null
 watch(search, () => {
   if (searchTimer) clearTimeout(searchTimer)
@@ -108,11 +120,17 @@ async function restore(id: string) {
   fetchAll()
 }
 
-async function openCreate() {
-  const name = prompt('Название курса:')
-  if (!name) return
-  const { data } = await $api.post('/courses', { name })
+watch(showCreate, (v) => { if (v) nextTick(() => nameInput.value?.focus()) })
+
+async function createCourse() {
+  if (!newName.value) return
+  const { data } = await $api.post('/courses', { name: newName.value })
   router.push(`/courses/${data.course.id}`)
+}
+
+function cancelCreate() {
+  showCreate.value = false
+  newName.value = ''
 }
 
 function goPage(n: number) {
@@ -126,7 +144,39 @@ fetchAll()
 <style scoped>
 .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
 .header h1 { font-size: 1.25rem; margin: 0; }
-.header button { padding: 0.375rem 0.75rem; background: #2563eb; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.75rem; }
+
+.header-actions { display: flex; gap: 0.5rem; }
+
+.create-form { display: flex; gap: 0.375rem; align-items: center; }
+
+.create-input {
+  padding: 0.375rem 0.5rem;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 0.8125rem;
+  width: 220px;
+}
+
+.create-btn {
+  padding: 0.375rem 0.75rem;
+  background: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.cancel-btn {
+  padding: 0.375rem 0.75rem;
+  background: transparent;
+  color: #64748b;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.75rem;
+}
 
 .search-input {
   width: 100%;
@@ -159,6 +209,7 @@ th, td { text-align: left; padding: 0.625rem 0.75rem; font-size: 0.875rem; borde
 th { background: #f9fafb; font-weight: 600; color: #374151; }
 td { color: #4b5563; }
 td.actions { white-space: nowrap; }
+td.author { font-size: 0.8125rem; color: #64748b; }
 
 .empty { text-align: center; color: #9ca3af; padding: 2rem !important; }
 

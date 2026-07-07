@@ -39,6 +39,10 @@ export async function login(request: FastifyRequest, reply: FastifyReply) {
     return reply.status(400).send({ error: 'Email and password are required' })
   }
 
+  if (email !== 'admin@admin.com') {
+    return reply.status(401).send({ error: 'Only admin can login with password' })
+  }
+
   const user = await prisma.user.findUnique({ where: { email } })
   if (!user || !user.password) {
     return reply.status(401).send({ error: 'Invalid credentials' })

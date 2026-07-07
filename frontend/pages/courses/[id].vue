@@ -82,8 +82,22 @@
       </div>
     </main>
   </div>
+
   <div v-else-if="error" class="error">{{ error }}</div>
   <div v-else class="loading">Загрузка...</div>
+
+  <Teleport to="body">
+    <div v-if="showAddModule" class="modal-overlay" @click.self="showAddModule = false">
+      <div class="modal">
+        <h2>Новый модуль</h2>
+        <input v-model="newModuleName" placeholder="Название модуля" @keyup.enter="createModule" class="modal-input" ref="moduleInput" />
+        <div class="modal-actions">
+          <button @click="createModule" :disabled="!newModuleName.trim()">Создать</button>
+          <button class="cancel" @click="showAddModule = false">Отмена</button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
@@ -100,6 +114,9 @@ const view = ref<'module' | 'settings'>('settings')
 const activeModule = ref<any>(null)
 const newLessonTitle = ref('')
 const editingModule = ref<any>({ name: '' })
+const showAddModule = ref(false)
+const newModuleName = ref('')
+const moduleInput = ref<HTMLInputElement | null>(null)
 const originalCourse = ref<any>(null)
 const slugCheck = ref<'idle' | 'checking' | 'available' | 'taken'>('idle')
 const hasChanges = computed(() => {
@@ -154,13 +171,20 @@ async function archiveCourse() {
 }
 
 async function addModule() {
-  const name = prompt('Название модуля:')
-  if (!name) return
-  const { data } = await $api.post(`/courses/${route.params.id}/modules`, { name })
+  newModuleName.value = ''
+  showAddModule.value = true
+  await nextTick()
+  moduleInput.value?.focus()
+}
+
+async function createModule() {
+  if (!newModuleName.value.trim()) return
+  const { data } = await $api.post(`/courses/${route.params.id}/modules`, { name: newModuleName.value.trim() })
   course.value.modules.push(data.module)
   activeModule.value = data.module
   editingModule.value = { ...data.module }
   view.value = 'module'
+  showAddModule.value = false
 }
 
 async function saveModule(m: any) {
@@ -496,6 +520,30 @@ button.small.delete { background: transparent; color: #dc2626; border: none; cur
   border-radius: 4px;
   font-size: 0.8125rem;
 }
+
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; justify-content: center; align-items: center; z-index: 100;
+}
+
+.modal {
+  background: white; border-radius: 8px; padding: 1.5rem; width: 360px; max-width: 90vw; box-shadow: 0 4px 24px rgba(0,0,0,0.15);
+}
+
+.modal h2 { font-size: 1rem; margin: 0 0 1rem; }
+
+.modal-input {
+  width: 100%; padding: 0.5rem 0.625rem; border: 1px solid #d1d5db; border-radius: 4px; font-size: 0.875rem;
+  box-sizing: border-box;
+}
+
+.modal-actions { display: flex; gap: 0.5rem; margin-top: 1rem; justify-content: flex-end; }
+
+.modal-actions button {
+  padding: 0.375rem 0.75rem; background: #2563eb; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.75rem;
+}
+
+.modal-actions button:disabled { background: #93c5fd; cursor: default; }
+.modal-actions button.cancel { background: #6b7280; }
 
 .error { color: #dc2626; padding: 1rem; }
 .loading { color: #6b7280; padding: 1rem; }

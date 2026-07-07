@@ -3,8 +3,8 @@
     <div class="header">
       <h1>Ассистенты</h1>
       <div class="header-actions">
-        <span v-if="!hasOpenRouterKey" class="warning">Не добавлен ключ Open Router</span>
-        <button :disabled="!hasOpenRouterKey" @click="openCreate">+ Создать</button>
+        <span v-if="missingKeys.length" class="warning">Не добавлены: {{ missingKeys.join(', ') }}</span>
+        <button :disabled="!!missingKeys.length" @click="openCreate">+ Создать</button>
       </div>
     </div>
 
@@ -12,9 +12,9 @@
       <thead>
         <tr>
           <th>Название</th>
-          <th>Модель</th>
-          <th>Сервис</th>
-          <th>Температура</th>
+          <th>LLM модель</th>
+          <th>TTS модель</th>
+          <th>Голос</th>
           <th>Статус</th>
           <th>Создан</th>
           <th></th>
@@ -22,10 +22,10 @@
       </thead>
       <tbody>
         <tr v-for="item in items" :key="item.id">
-          <td>{{ item.name }}</td>
-          <td><code>{{ item.model }}</code></td>
-          <td>{{ item.service === 'yandex' ? 'Yandex' : 'Open Router' }}</td>
-          <td>{{ item.temperature }}</td>
+          <td><NuxtLink :to="`/assistants/${item.id}`" class="name-link">{{ item.name }}</NuxtLink></td>
+          <td><code>{{ item.model || '—' }}</code></td>
+          <td><code>{{ item.ttsModel || '—' }}</code></td>
+          <td>{{ item.ttsVoice || '—' }}</td>
           <td>
             <span :class="['badge', item.active ? 'badge-ok' : 'badge-err']">
               {{ item.active ? 'Активен' : 'Отключён' }}
@@ -33,8 +33,12 @@
           </td>
           <td>{{ formatDate(item.createdAt) }}</td>
           <td>
-            <button class="small" @click="openEdit(item)">Ред.</button>
-            <button class="small delete" @click="remove(item.id)">Удал.</button>
+            <NuxtLink :to="`/assistants/${item.id}`" class="icon-btn" title="Редактировать">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            </NuxtLink>
+            <button class="icon-btn delete" title="Удалить" @click="remove(item.id)">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            </button>
           </td>
         </tr>
       </tbody>
@@ -48,36 +52,7 @@
             <label>Название</label>
             <input v-model="form.name" placeholder="Помощник по математике" />
 
-            <label>System prompt</label>
-            <textarea v-model="form.prompt" rows="4" placeholder="Ты — полезный ассистент..." />
 
-            <label>Модель</label>
-            <select v-if="form.service === 'open-router'" v-model="form.model">
-              <option value="" disabled>Выберите модель</option>
-              <option v-for="m in models" :key="m.id" :value="m.id">{{ m.name }}</option>
-            </select>
-            <input v-else v-model="form.model" placeholder="Модель Yandex" />
-
-            <div class="row">
-              <div>
-                <label>Сервис</label>
-                <select v-model="form.service" @change="onServiceChange">
-                  <option value="open-router">Open Router</option>
-                  <option value="yandex">Yandex</option>
-                </select>
-              </div>
-              <div>
-                <label>Температура</label>
-                <input v-model.number="form.temperature" type="number" step="0.1" min="0" max="2" />
-              </div>
-              <div>
-                <label>Статус</label>
-                <select v-model="form.active">
-                  <option :value="true">Активен</option>
-                  <option :value="false">Отключён</option>
-                </select>
-              </div>
-            </div>
           </div>
 
           <div class="modal-actions">
@@ -96,18 +71,13 @@ definePageMeta({ middleware: 'auth', layout: 'default' })
 const { $api } = useNuxtApp()
 
 const items = ref<any[]>([])
-const models = ref<{ id: string; name: string }[]>([])
+
 const showForm = ref(false)
 const editing = ref<any>(null)
 const saving = ref(false)
-const hasOpenRouterKey = ref(false)
+const missingKeys = ref<string[]>([])
 const form = reactive({
   name: '',
-  prompt: '',
-  model: '',
-  service: 'open-router',
-  temperature: 0.7,
-  active: true,
 })
 
 function formatDate(date: string) {
@@ -115,62 +85,41 @@ function formatDate(date: string) {
 }
 
 async function fetchAll() {
-  const [{ data }, credRes] = await Promise.all([
+  const [{ data }, credsRes] = await Promise.all([
     $api.get('/assistants'),
-    $api.get('/credentials/open-router').catch(() => null),
+    $api.get('/credentials').catch(() => null),
   ])
   items.value = data.assistants
-  hasOpenRouterKey.value = !!credRes
-}
-
-async function fetchModels() {
-  try {
-    const { data } = await $api.get('/assistants/models')
-    models.value = data.models
-  } catch {
-    models.value = []
-  }
-}
-
-async function onServiceChange() {
-  form.model = ''
-  if (form.service === 'open-router') {
-    await fetchModels()
-  }
+  const creds = credsRes?.data?.credentials || []
+  const hasYandex = creds.some((c: any) => c.service === 'yandex')
+  const hasLlm = creds.some((c: any) => ['yandex-ai', 'proxyapi'].includes(c.service))
+  missingKeys.value = []
+  if (!hasYandex) missingKeys.value.push('ключ синтеза речи')
+  if (!hasLlm) missingKeys.value.push('ключ LLM')
 }
 
 async function openCreate() {
   editing.value = null
   form.name = ''
-  form.prompt = ''
-  form.model = ''
-  form.service = 'open-router'
-  form.temperature = 0.7
-  form.active = true
   showForm.value = true
-  await fetchModels()
 }
 
-function openEdit(item: any) {
+async function openEdit(item: any) {
   editing.value = item
   form.name = item.name
-  form.prompt = item.prompt
-  form.model = item.model
-  form.service = item.service
-  form.temperature = item.temperature
-  form.active = item.active
   showForm.value = true
 }
 
 async function save() {
-  if (!form.name || !form.prompt || !form.model) return
+  if (!form.name) return
 
   saving.value = true
   try {
+    const payload = { ...form, temperature: 0.7, active: false }
     if (editing.value) {
-      await $api.put(`/assistants/${editing.value.id}`, form)
+      await $api.put(`/assistants/${editing.value.id}`, payload)
     } else {
-      await $api.post('/assistants', form)
+      await $api.post('/assistants', payload)
     }
     showForm.value = false
     await fetchAll()
@@ -206,8 +155,23 @@ code { background: #f3f4f6; padding: 0.125rem 0.375rem; border-radius: 2px; font
 .badge-ok { background: #dcfce7; color: #166534; }
 .badge-err { background: #fee2e2; color: #991b1b; }
 
-button.small { background: transparent; color: #2563eb; padding: 0; font-size: 0.75rem; cursor: pointer; border: none; margin-right: 0.5rem; }
-button.small.delete { color: #dc2626; }
+.icon-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.25rem;
+  color: #64748b;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 4px;
+}
+
+.icon-btn:hover { background: #f1f5f9; color: #1e293b; }
+.icon-btn.delete:hover { background: #fef2f2; color: #dc2626; }
+
+.name-link { color: #2563eb; text-decoration: none; }
+.name-link:hover { text-decoration: underline; }
 
 .modal-overlay {
   position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; justify-content: center; align-items: center; z-index: 100;
@@ -222,6 +186,7 @@ button.small.delete { color: #dc2626; }
   box-sizing: border-box;
 }
 .form textarea { font-family: inherit; resize: vertical; }
+
 .row { display: flex; gap: 0.75rem; }
 .row > div { flex: 1; }
 

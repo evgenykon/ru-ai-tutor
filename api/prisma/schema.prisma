@@ -66,6 +66,7 @@ model ServiceCredential {
   id        String   @id @default(cuid())
   service   String   @unique
   keyValue  String   @map("key_value")
+  folderId  String?  @map("folder_id")
   updatedAt DateTime @updatedAt
 
   @@map("service_credentials")
@@ -118,9 +119,15 @@ model Assistant {
   name        String
   prompt      String
   model       String
+  ttsModel    String?          @map("tts_model")
+  ttsVoice    String?          @map("tts_voice")
+  ttsRole     String?          @map("tts_role")
+  ttsPitch    Int?             @default(0) @map("tts_pitch")
   temperature Float?           @default(0.7)
   service     String           @default("open-router")
   active      Boolean          @default(true)
+  avatar      String?
+  speechRate  Float?           @default(1.0) @map("speech_rate")
   courses     Course[]
   users       UserAssistant[]
   createdAt   DateTime         @default(now())

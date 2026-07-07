@@ -9,6 +9,10 @@ import { assistantRoutes } from './routes/assistant.routes'
 import { courseRoutes } from './routes/course.routes'
 import { moduleRoutes } from './routes/module.routes'
 import { lessonRoutes } from './routes/lesson.routes'
+import { yandexOAuthRoutes } from './routes/yandex-oauth.routes'
+import { avatarRoutes } from './routes/avatar.routes'
+import { yandexModelsRoutes } from './routes/yandex-models.routes'
+import { ttsRoutes } from './routes/tts.routes'
 
 const app = Fastify({ logger: true })
 
@@ -25,6 +29,10 @@ app.register(assistantRoutes)
 app.register(courseRoutes)
 app.register(moduleRoutes)
 app.register(lessonRoutes)
+app.register(yandexOAuthRoutes)
+app.register(avatarRoutes)
+app.register(yandexModelsRoutes)
+app.register(ttsRoutes)
 
 async function start() {
   try {

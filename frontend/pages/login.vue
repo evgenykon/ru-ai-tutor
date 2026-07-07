@@ -12,9 +12,12 @@
         {{ submitting ? 'Вход...' : 'Войти' }}
       </button>
 
-      <p class="link">
-        Нет аккаунта? <NuxtLink to="/register">Регистрация</NuxtLink>
-      </p>
+      <div class="divider"><span>или</span></div>
+
+      <a :href="yandexUrl" class="yandex-btn">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="#FC3F1D"><path d="M12 0C5.372 0 0 5.372 0 12s5.372 12 12 12 12-5.372 12-12S18.628 0 12 0zm2.82 17.28h-1.68l-1.02-3.9H9.84l-1.02 3.9H7.14l2.34-7.56h1.98l1.38 4.56 1.38-4.56h1.98l2.34 7.56h-1.68l-1.02-3.9h-1.26l-1.02 3.9z"/></svg>
+        Войти через Яндекс
+      </a>
     </form>
   </div>
 </template>
@@ -22,12 +25,14 @@
 <script setup lang="ts">
 definePageMeta({ layout: false, middleware: 'guest' })
 
+const config = useRuntimeConfig()
 const email = ref('')
 const password = ref('')
 const error = ref('')
 const submitting = ref(false)
 
 const store = useAuthStore()
+const yandexUrl = `${config.public.baseUrl}/api/auth/yandex`
 
 async function handleLogin() {
   error.value = ''
@@ -77,7 +82,7 @@ async function handleLogin() {
   font-size: 0.875rem;
 }
 
-.login-form button {
+.login-form button[type="submit"] {
   padding: 0.5rem 1rem;
   background: #2563eb;
   color: white;
@@ -96,4 +101,37 @@ async function handleLogin() {
   font-size: 0.75rem;
   margin: 0;
 }
+
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  color: #9ca3af;
+}
+
+.divider::before,
+.divider::after {
+  content: '';
+  flex: 1;
+  border-top: 1px solid #e5e7eb;
+}
+
+.yandex-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: white;
+  color: #1e293b;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  text-decoration: none;
+  transition: background 0.1s;
+}
+
+.yandex-btn:hover { background: #f9fafb; }
 </style>
