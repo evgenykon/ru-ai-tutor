@@ -72,7 +72,7 @@
 
 ## Before Committing
 
-1. Run lint: `make tools-lint-api && make tools-lint-frontend`
-2. Run type-check: `make tools-typecheck-api && make tools-typecheck-frontend`
+1. Run lint: `make tools-lint`
+2. Run type-check: `make tools-typecheck`
 3. Check `git diff` — no secrets, no debug code, no commented code
 4. Verify migrations are up to date

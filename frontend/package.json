@@ -9,6 +9,7 @@
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
     "lint": "eslint .",
+    "typecheck": "vue-tsc --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
@@ -38,6 +39,7 @@
     "eslint-config-prettier": "^10.1.8",
     "happy-dom": "^20.8.3",
     "sass": "^1.98.0",
+    "vue-tsc": "^2.2.0",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"
   }

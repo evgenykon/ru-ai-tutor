@@ -9,6 +9,7 @@
     "test": "vitest",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
+    "typecheck": "tsc --noEmit",
     "migrate:dev": "bunx prisma migrate dev",
     "migrate:create": "bunx prisma migrate dev --create-only",
     "migrate:deploy": "bunx prisma migrate deploy",

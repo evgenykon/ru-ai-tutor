@@ -1,4 +1,4 @@
-.PHONY: build build-dev up down dev dev-down logs-prod logs-dev run-dev-frontend run-dev-api dev-migrate dev-migrate-create dev-prisma-generate clear-space
+.PHONY: build build-dev up down dev dev-down logs-prod logs-dev run-dev-frontend run-dev-api dev-migrate dev-migrate-create dev-prisma-generate clear-space tools-lint tools-typecheck
 
 default: dev
 
@@ -52,5 +52,6 @@ clear-space:
 tools-lint:
 	docker compose -f docker-compose.yml exec api npx eslint . && docker compose -f docker-compose.yml exec frontend npx eslint .
 
-tools-typecheck-api:
-	docker compose -f docker-compose.yml exec api npx tsc --noEmit
+tools-typecheck:
+	docker compose -f docker-compose.yml exec api sh -c "bun run typecheck"
+	docker compose -f docker-compose.yml exec frontend sh -c "pnpm run typecheck"
