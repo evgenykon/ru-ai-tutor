@@ -1,0 +1,7 @@
+FROM node:24
+RUN npm install -g bun
+WORKDIR /app
+COPY package.json .
+RUN bun install
+COPY . .
+CMD ["bun", "run", "dev"]
