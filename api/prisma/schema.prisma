@@ -41,7 +41,7 @@ model User {
   name           String?
   phone          String?
   password       String?
-  active         Boolean       @default(true)
+  active      Boolean  @default(false)
   roles          UserRole[]
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
@@ -68,6 +68,45 @@ model ServiceCredential {
   @@map("service_credentials")
 }
 
+model Course {
+  id          String      @id @default(cuid())
+  name        String
+  description String?
+  active      Boolean     @default(false)
+  assistantId String?     @map("assistant_id")
+  assistant   Assistant?  @relation(fields: [assistantId], references: [id], onDelete: SetNull)
+  modules     Module[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@map("courses")
+}
+
+model Module {
+  id        String   @id @default(cuid())
+  courseId   String   @map("course_id")
+  course    Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  name      String
+  order     Int      @default(0)
+  lessons   Lesson[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("modules")
+}
+
+model Lesson {
+  id       String @id @default(cuid())
+  moduleId  String @map("module_id")
+  module   Module @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  title     String
+  order     Int    @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("lessons")
+}
+
 model Assistant {
   id          String   @id @default(cuid())
   name        String
@@ -76,6 +115,7 @@ model Assistant {
   temperature Float?   @default(0.7)
   service     String   @default("open-router")
   active      Boolean  @default(true)
+  courses     Course[]
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

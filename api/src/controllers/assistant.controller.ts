@@ -1,6 +1,22 @@
 import { FastifyRequest, FastifyReply } from 'fastify'
 import { prisma } from '../db'
 
+export async function models(request: FastifyRequest, reply: FastifyReply) {
+  const cred = await prisma.serviceCredential.findUnique({ where: { service: 'open-router' } })
+  if (!cred) return reply.status(400).send({ error: 'Open Router key not configured' })
+
+  try {
+    const res = await fetch('https://openrouter.ai/api/v1/models', {
+      headers: { Authorization: `Bearer ${cred.keyValue}` },
+    })
+    if (!res.ok) throw new Error(`OpenRouter returned ${res.status}`)
+    const json = await res.json() as { data: { id: string; name?: string }[] }
+    return { models: json.data.map((m) => ({ id: m.id, name: m.name || m.id })) }
+  } catch (e: any) {
+    reply.status(502).send({ error: e.message || 'Failed to fetch models' })
+  }
+}
+
 export async function list() {
   const items = await prisma.assistant.findMany({ orderBy: { createdAt: 'desc' } })
   return { assistants: items }

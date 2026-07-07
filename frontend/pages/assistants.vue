@@ -2,7 +2,10 @@
   <div>
     <div class="header">
       <h1>Ассистенты</h1>
-      <button @click="openCreate">+ Создать</button>
+      <div class="header-actions">
+        <span v-if="!hasOpenRouterKey" class="warning">Не добавлен ключ Open Router</span>
+        <button :disabled="!hasOpenRouterKey" @click="openCreate">+ Создать</button>
+      </div>
     </div>
 
     <table>
@@ -49,12 +52,16 @@
             <textarea v-model="form.prompt" rows="4" placeholder="Ты — полезный ассистент..." />
 
             <label>Модель</label>
-            <input v-model="form.model" placeholder="gpt-4o" />
+            <select v-if="form.service === 'open-router'" v-model="form.model">
+              <option value="" disabled>Выберите модель</option>
+              <option v-for="m in models" :key="m.id" :value="m.id">{{ m.name }}</option>
+            </select>
+            <input v-else v-model="form.model" placeholder="Модель Yandex" />
 
             <div class="row">
               <div>
                 <label>Сервис</label>
-                <select v-model="form.service">
+                <select v-model="form.service" @change="onServiceChange">
                   <option value="open-router">Open Router</option>
                   <option value="yandex">Yandex</option>
                 </select>
@@ -74,7 +81,7 @@
           </div>
 
           <div class="modal-actions">
-            <button @click="save">Сохранить</button>
+            <button :disabled="saving" @click="save">Сохранить</button>
             <button class="cancel" @click="showForm = false">Отмена</button>
           </div>
         </div>
@@ -89,8 +96,11 @@ definePageMeta({ middleware: 'auth', layout: 'default' })
 const { $api } = useNuxtApp()
 
 const items = ref<any[]>([])
+const models = ref<{ id: string; name: string }[]>([])
 const showForm = ref(false)
 const editing = ref<any>(null)
+const saving = ref(false)
+const hasOpenRouterKey = ref(false)
 const form = reactive({
   name: '',
   prompt: '',
@@ -105,11 +115,31 @@ function formatDate(date: string) {
 }
 
 async function fetchAll() {
-  const { data } = await $api.get('/assistants')
+  const [{ data }, credRes] = await Promise.all([
+    $api.get('/assistants'),
+    $api.get('/credentials/open-router').catch(() => null),
+  ])
   items.value = data.assistants
+  hasOpenRouterKey.value = !!credRes
 }
 
-function openCreate() {
+async function fetchModels() {
+  try {
+    const { data } = await $api.get('/assistants/models')
+    models.value = data.models
+  } catch {
+    models.value = []
+  }
+}
+
+async function onServiceChange() {
+  form.model = ''
+  if (form.service === 'open-router') {
+    await fetchModels()
+  }
+}
+
+async function openCreate() {
   editing.value = null
   form.name = ''
   form.prompt = ''
@@ -118,6 +148,7 @@ function openCreate() {
   form.temperature = 0.7
   form.active = true
   showForm.value = true
+  await fetchModels()
 }
 
 function openEdit(item: any) {
@@ -134,14 +165,18 @@ function openEdit(item: any) {
 async function save() {
   if (!form.name || !form.prompt || !form.model) return
 
-  if (editing.value) {
-    await $api.put(`/assistants/${editing.value.id}`, form)
-  } else {
-    await $api.post('/assistants', form)
+  saving.value = true
+  try {
+    if (editing.value) {
+      await $api.put(`/assistants/${editing.value.id}`, form)
+    } else {
+      await $api.post('/assistants', form)
+    }
+    showForm.value = false
+    await fetchAll()
+  } finally {
+    saving.value = false
   }
-
-  showForm.value = false
-  await fetchAll()
 }
 
 async function remove(id: string) {
@@ -155,7 +190,10 @@ fetchAll()
 <style scoped>
 .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
 .header h1 { font-size: 1.25rem; margin: 0; }
-.header button { padding: 0.375rem 0.75rem; background: #2563eb; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.75rem; }
+.header-actions { display: flex; align-items: center; gap: 0.75rem; }
+.header-actions button { padding: 0.375rem 0.75rem; background: #2563eb; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.75rem; }
+.header-actions button:disabled { opacity: 0.4; cursor: default; }
+.warning { font-size: 0.75rem; color: #dc2626; }
 
 table { width: 100%; border-collapse: collapse; background: white; border-radius: 6px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
 th, td { text-align: left; padding: 0.625rem 0.75rem; font-size: 0.875rem; border-bottom: 1px solid #e5e7eb; }
@@ -189,5 +227,6 @@ button.small.delete { color: #dc2626; }
 
 .modal-actions { display: flex; gap: 0.5rem; margin-top: 1rem; justify-content: flex-end; }
 .modal-actions button { padding: 0.375rem 0.75rem; background: #2563eb; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.75rem; }
+.modal-actions button:disabled { opacity: 0.5; }
 .modal-actions button.cancel { background: #6b7280; }
 </style>

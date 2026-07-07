@@ -9,8 +9,9 @@
         <NuxtLink to="/" :style="linkStyle('/')">Дашборд</NuxtLink>
         <NuxtLink to="/users" :style="linkStyle('/users')">Пользователи</NuxtLink>
         <NuxtLink to="/api-keys" :style="linkStyle('/api-keys')">Ключи</NuxtLink>
-        <NuxtLink to="/assistants" :style="linkStyle('/assistants')">Ассистенты</NuxtLink>
         <NuxtLink to="/usage" :style="linkStyle('/usage')">Использование</NuxtLink>
+        <NuxtLink to="/assistants" :style="linkStyle('/assistants')">Ассистенты</NuxtLink>
+        <NuxtLink to="/courses" :style="linkStyle('/courses')">Курсы</NuxtLink>
       </nav>
 
       <div style="padding: 1rem; border-top: 1px solid #334155;">
