@@ -1,0 +1,95 @@
+# Production compose — production builds, no db (external), healthchecks, resource limits
+
+services:
+
+  redis:
+    image: redis:alpine
+    restart: always
+    command: redis-server --appendonly yes --appendfsync everysec --auto-aof-rewrite-percentage 100 --auto-aof-rewrite-min-size 64mb
+    volumes:
+      - redis_data:/data
+    expose:
+      - "6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1GB
+
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    image: ${DOCKER_IMAGE_PREFIX:-}api:${IMAGE_TAG_API:-latest}
+    depends_on:
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env
+    expose:
+      - "3001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2GB
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: ${DOCKER_IMAGE_PREFIX:-}frontend:${IMAGE_TAG_FRONTEND:-latest}
+    env_file: .env
+    expose:
+      - "3000"
+    depends_on:
+      - api
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4GB
+
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    image: ${DOCKER_IMAGE_PREFIX:-}nginx:${IMAGE_TAG_NGINX:-latest}
+    expose:
+      - "8080"
+    ports:
+      - "8089:8080"
+    volumes:
+      - ./nginx/nginx.prod.conf.template:/etc/nginx/nginx.conf.template:ro
+      - nginx_cache:/var/cache/nginx
+      - nginx_logs:/var/log/nginx
+    env_file:
+      - .env
+    depends_on:
+      frontend:
+        condition: service_started
+      api:
+        condition: service_healthy
+    restart: on-failure
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+
+volumes:
+  redis_data:
+  nginx_cache:
+  nginx_logs:

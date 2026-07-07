@@ -1,0 +1,115 @@
+# Dev compose — hot-reload, volume mounts, local postgres + redis
+
+services:
+
+  db:
+    image: postgres:17
+    restart: on-failure
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+    env_file:
+      - .env
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  redis:
+    image: redis:alpine
+    restart: on-failure
+    command: redis-server --appendonly yes --appendfsync everysec --auto-aof-rewrite-percentage 100 --auto-aof-rewrite-min-size 64mb
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile.dev
+    volumes:
+      - ./api:/app
+      - ./modules:/app/modules
+    command: sh -c "bun install && bun run modules:merge && bun run migrate:deploy && bun run prisma:generate && bun run dev"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    env_file: .env
+    depends_on:
+      - api
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - ./modules:/app/modules
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1GB
+
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile.dev
+    ports:
+      - "8089:8080"
+    volumes:
+      - ./nginx/nginx.dev.conf.template:/etc/nginx/nginx.conf.template:ro
+    env_file:
+      - .env
+    depends_on:
+      frontend:
+        condition: service_started
+      api:
+        condition: service_healthy
+    restart: on-failure
+    deploy:
+      resources:
+        limits:
+          cpus: '0.2'
+          memory: 128M
+
+volumes:
+  postgres_data:
+  redis_data:
