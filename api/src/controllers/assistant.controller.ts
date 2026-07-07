@@ -17,14 +17,19 @@ export async function models(request: FastifyRequest, reply: FastifyReply) {
   }
 }
 
-export async function list() {
-  const items = await prisma.assistant.findMany({ orderBy: { createdAt: 'desc' } })
+export async function list(request: FastifyRequest) {
+  const userAssistantIds = await prisma.userAssistant.findMany({
+    where: { userId: request.user!.userId },
+    select: { assistantId: true },
+  }).then(r => r.map(ua => ua.assistantId))
+  if (!userAssistantIds.length) return { assistants: [] }
+  const items = await prisma.assistant.findMany({ where: { id: { in: userAssistantIds } }, orderBy: { createdAt: 'desc' } })
   return { assistants: items }
 }
 
 export async function getById(request: FastifyRequest, reply: FastifyReply) {
   const { id } = request.params as { id: string }
-  const item = await prisma.assistant.findUnique({ where: { id } })
+  const item = await prisma.assistant.findFirst({ where: { id, users: { some: { userId: request.user!.userId } } } })
   if (!item) return reply.status(404).send({ error: 'Not found' })
   return { assistant: item }
 }
@@ -51,6 +56,7 @@ export async function create(request: FastifyRequest, reply: FastifyReply) {
       temperature: body.temperature ?? 0.7,
       service: body.service ?? 'open-router',
       active: body.active ?? true,
+      users: { create: { userId: request.user!.userId } },
     },
   })
 
@@ -68,7 +74,7 @@ export async function update(request: FastifyRequest, reply: FastifyReply) {
     active?: boolean
   }
 
-  const existing = await prisma.assistant.findUnique({ where: { id } })
+  const existing = await prisma.assistant.findFirst({ where: { id, users: { some: { userId: request.user!.userId } } } })
   if (!existing) return reply.status(404).send({ error: 'Not found' })
 
   const item = await prisma.assistant.update({
@@ -88,12 +94,8 @@ export async function update(request: FastifyRequest, reply: FastifyReply) {
 
 export async function remove(request: FastifyRequest, reply: FastifyReply) {
   const { id } = request.params as { id: string }
-
-  try {
-    await prisma.assistant.delete({ where: { id } })
-  } catch {
-    return reply.status(404).send({ error: 'Not found' })
-  }
-
+  const existing = await prisma.assistant.findFirst({ where: { id, users: { some: { userId: request.user!.userId } } } })
+  if (!existing) return reply.status(404).send({ error: 'Not found' })
+  await prisma.assistant.delete({ where: { id } })
   return { success: true }
 }

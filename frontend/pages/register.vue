@@ -1,19 +1,20 @@
 <template>
   <div class="login-page">
-    <form @submit.prevent="handleLogin" class="login-form">
-      <h1>Вход</h1>
+    <form @submit.prevent="handleRegister" class="login-form">
+      <h1>Регистрация</h1>
 
+      <input v-model="name" type="text" placeholder="Имя" />
       <input v-model="email" type="email" placeholder="Email" required />
-      <input v-model="password" type="password" placeholder="Пароль" required />
+      <input v-model="password" type="password" placeholder="Пароль" required minlength="6" />
 
       <p v-if="error" class="error">{{ error }}</p>
 
       <button type="submit" :disabled="submitting">
-        {{ submitting ? 'Вход...' : 'Войти' }}
+        {{ submitting ? 'Регистрация...' : 'Зарегистрироваться' }}
       </button>
 
       <p class="link">
-        Нет аккаунта? <NuxtLink to="/register">Регистрация</NuxtLink>
+        Уже есть аккаунт? <NuxtLink to="/login">Войти</NuxtLink>
       </p>
     </form>
   </div>
@@ -22,22 +23,25 @@
 <script setup lang="ts">
 definePageMeta({ layout: false, middleware: 'guest' })
 
+const { $api } = useNuxtApp()
+const store = useAuthStore()
+
+const name = ref('')
 const email = ref('')
 const password = ref('')
 const error = ref('')
 const submitting = ref(false)
 
-const store = useAuthStore()
-
-async function handleLogin() {
+async function handleRegister() {
   error.value = ''
   submitting.value = true
 
   try {
-    await store.login(email.value, password.value)
+    const { data } = await $api.post('/auth/register', { email: email.value, password: password.value, name: name.value || undefined })
+    store.user = data.user
     navigateTo('/')
   } catch (err: any) {
-    error.value = err?.response?.data?.error || 'Ошибка входа'
+    error.value = err?.response?.data?.error || 'Ошибка регистрации'
   } finally {
     submitting.value = false
   }
@@ -96,4 +100,14 @@ async function handleLogin() {
   font-size: 0.75rem;
   margin: 0;
 }
+
+.link {
+  font-size: 0.75rem;
+  color: #6b7280;
+  text-align: center;
+  margin: 0;
+}
+
+.link a { color: #2563eb; text-decoration: none; }
+.link a:hover { text-decoration: underline; }
 </style>

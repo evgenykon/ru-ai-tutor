@@ -2,8 +2,9 @@ import { FastifyRequest, FastifyReply } from 'fastify'
 import crypto from 'crypto'
 import { prisma } from '../db'
 
-export async function list() {
+export async function list(request: FastifyRequest) {
   const keys = await prisma.apiKey.findMany({
+    where: { userId: request.user!.userId },
     select: { id: true, name: true, prefix: true, active: true, expiresAt: true, lastUsedAt: true, createdAt: true },
     orderBy: { createdAt: 'desc' },
   })
@@ -19,7 +20,7 @@ export async function create(request: FastifyRequest, reply: FastifyReply) {
   const hash = crypto.createHash('sha256').update(raw).digest('hex')
 
   const key = await prisma.apiKey.create({
-    data: { name, prefix, keyHash: hash },
+    data: { name, prefix, keyHash: hash, userId: request.user!.userId },
     select: { id: true, name: true, prefix: true, active: true, createdAt: true },
   })
 
@@ -28,7 +29,7 @@ export async function create(request: FastifyRequest, reply: FastifyReply) {
 
 export async function remove(request: FastifyRequest, reply: FastifyReply) {
   const { id } = request.params as { id: string }
-  const existing = await prisma.apiKey.findUnique({ where: { id } })
+  const existing = await prisma.apiKey.findFirst({ where: { id, userId: request.user!.userId } })
   if (!existing) return reply.status(404).send({ error: 'Not found' })
 
   await prisma.apiKey.delete({ where: { id } })

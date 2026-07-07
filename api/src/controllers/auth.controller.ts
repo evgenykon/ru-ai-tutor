@@ -3,6 +3,35 @@ import bcrypt from 'bcrypt'
 import { prisma } from '../db'
 import { signToken } from '../helpers/token'
 
+export async function register(request: FastifyRequest, reply: FastifyReply) {
+  const { email, password, name } = request.body as { email: string; password: string; name?: string }
+
+  if (!email || !password) {
+    return reply.status(400).send({ error: 'Email and password are required' })
+  }
+
+  const existing = await prisma.user.findUnique({ where: { email } })
+  if (existing) {
+    return reply.status(409).send({ error: 'Email already registered' })
+  }
+
+  const hashed = await bcrypt.hash(password, 10)
+  const user = await prisma.user.create({
+    data: { email, name: name || null, password: hashed, active: true },
+  })
+
+  const token = signToken({ userId: user.id, email: user.email })
+
+  reply.setCookie('token', token, {
+    httpOnly: true,
+    path: '/',
+    sameSite: 'lax',
+    maxAge: 7 * 24 * 60 * 60,
+  })
+
+  return { user: { id: user.id, email: user.email, name: user.name } }
+}
+
 export async function login(request: FastifyRequest, reply: FastifyReply) {
   const { email, password } = request.body as { email: string; password: string }
 

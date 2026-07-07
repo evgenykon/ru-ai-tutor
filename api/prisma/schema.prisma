@@ -36,15 +36,18 @@ model RolePermission {
 }
 
 model User {
-  id             String        @id @default(cuid())
-  email          String        @unique
+  id             String          @id @default(cuid())
+  email          String          @unique
   name           String?
   phone          String?
   password       String?
-  active      Boolean  @default(false)
+  active         Boolean         @default(false)
   roles          UserRole[]
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  courses        UserCourse[]
+  assistants     UserAssistant[]
+  apiKeys        ApiKey[]
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
 
   @@map("users")
 }
@@ -69,15 +72,18 @@ model ServiceCredential {
 }
 
 model Course {
-  id          String      @id @default(cuid())
+  id          String         @id @default(cuid())
   name        String
+  slug        String?        @unique
   description String?
-  active      Boolean     @default(false)
-  assistantId String?     @map("assistant_id")
-  assistant   Assistant?  @relation(fields: [assistantId], references: [id], onDelete: SetNull)
+  active      Boolean        @default(false)
+  archived    Boolean        @default(false)
+  assistantId String?        @map("assistant_id")
+  assistant   Assistant?     @relation(fields: [assistantId], references: [id], onDelete: SetNull)
   modules     Module[]
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  users       UserCourse[]
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
 
   @@map("courses")
 }
@@ -108,16 +114,17 @@ model Lesson {
 }
 
 model Assistant {
-  id          String   @id @default(cuid())
+  id          String           @id @default(cuid())
   name        String
   prompt      String
   model       String
-  temperature Float?   @default(0.7)
-  service     String   @default("open-router")
-  active      Boolean  @default(true)
+  temperature Float?           @default(0.7)
+  service     String           @default("open-router")
+  active      Boolean          @default(true)
   courses     Course[]
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  users       UserAssistant[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
 
   @@map("assistants")
 }
@@ -143,10 +150,32 @@ model ApiKey {
   prefix     String    @unique
   keyHash    String
   active     Boolean   @default(true)
+  userId     String    @map("user_id")
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   expiresAt  DateTime?
   lastUsedAt DateTime?
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
 
   @@map("api_keys")
+}
+
+model UserCourse {
+  userId   String @map("user_id")
+  courseId String @map("course_id")
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@id([userId, courseId])
+  @@map("user_courses")
+}
+
+model UserAssistant {
+  userId      String @map("user_id")
+  assistantId String @map("assistant_id")
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assistant   Assistant @relation(fields: [assistantId], references: [id], onDelete: Cascade)
+
+  @@id([userId, assistantId])
+  @@map("user_assistants")
 }
