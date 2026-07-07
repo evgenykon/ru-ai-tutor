@@ -2,6 +2,7 @@ import Fastify from 'fastify'
 import cookie from '@fastify/cookie'
 import { authRoutes } from './routes/auth.routes'
 import { userRoutes } from './routes/user.routes'
+import { apiKeyRoutes } from './routes/api-key.routes'
 
 const app = Fastify({ logger: true })
 
@@ -11,6 +12,7 @@ app.get('/health', async () => ({ status: 'ok' }))
 
 app.register(authRoutes)
 app.register(userRoutes)
+app.register(apiKeyRoutes)
 
 async function start() {
   try {
