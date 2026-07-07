@@ -10,7 +10,8 @@
             <label>API ключ</label>
             <div class="value">
               <code>{{ masked(yandex.keyValue) }}</code>
-              <button class="small" @click="editing = 'yandex'">Изменить</button>
+              <button class="small" @click="edit('yandex')">Изменить</button>
+              <button class="small delete" @click="remove('yandex')">Удалить</button>
             </div>
           </div>
           <div class="meta">Обновлён: {{ formatDate(yandex.updatedAt) }}</div>
@@ -35,7 +36,8 @@
             <label>API ключ</label>
             <div class="value">
               <code>{{ masked(openRouter.keyValue) }}</code>
-              <button class="small" @click="editing = 'open-router'">Изменить</button>
+              <button class="small" @click="edit('open-router')">Изменить</button>
+              <button class="small delete" @click="remove('open-router')">Удалить</button>
             </div>
           </div>
           <div class="meta">Обновлён: {{ formatDate(openRouter.updatedAt) }}</div>
@@ -52,29 +54,6 @@
       </div>
     </div>
 
-    <h2 style="margin-top: 2rem;">Системные ключи</h2>
-    <p class="hint">Ключи для внутренней аутентификации между сервисами.</p>
-
-    <table v-if="apiKeys.length">
-      <thead>
-        <tr>
-          <th>Название</th>
-          <th>Префикс</th>
-          <th>Статус</th>
-          <th>Последнее использование</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="key in apiKeys" :key="key.id">
-          <td>{{ key.name }}</td>
-          <td><code>{{ key.prefix }}...</code></td>
-          <td>{{ key.active ? 'Активен' : 'Отключён' }}</td>
-          <td>{{ key.lastUsedAt ? formatDate(key.lastUsedAt) : '—' }}</td>
-          <td><button class="delete" @click="removeKey(key.id)">Удалить</button></td>
-        </tr>
-      </tbody>
-    </table>
   </div>
 </template>
 
@@ -85,7 +64,6 @@ const { $api } = useNuxtApp()
 
 const yandex = ref<any>(null)
 const openRouter = ref<any>(null)
-const apiKeys = ref<any[]>([])
 const editing = ref('')
 const yandexValue = ref('')
 const openRouterValue = ref('')
@@ -101,34 +79,37 @@ function formatDate(date: string) {
 }
 
 async function fetchAll() {
-  const [credRes, keyRes] = await Promise.all([
-    $api.get('/credentials'),
-    $api.get('/api-keys'),
-  ])
-  yandex.value = credRes.data.credentials.find((c: any) => c.service === 'yandex') || null
-  openRouter.value = credRes.data.credentials.find((c: any) => c.service === 'open-router') || null
-  apiKeys.value = keyRes.data.keys
+  const { data } = await $api.get('/credentials')
+  yandex.value = data.credentials.find((c: any) => c.service === 'yandex') || null
+  openRouter.value = data.credentials.find((c: any) => c.service === 'open-router') || null
+}
+
+function edit(service: string) {
+  editing.value = service
+  const current = service === 'yandex' ? yandex.value : openRouter.value
+  if (current) {
+    if (service === 'yandex') yandexValue.value = current.keyValue
+    else openRouterValue.value = current.keyValue
+  }
 }
 
 async function save(service: string) {
   const value = service === 'yandex' ? yandexValue.value : openRouterValue.value
   if (!value) return
 
-  await $api.put('/credentials', { service, keyValue: value })
+  const { data } = await $api.put('/credentials', { service, keyValue: value })
+  if (service === 'yandex') yandex.value = data.credential
+  else openRouter.value = data.credential
 
-  if (service === 'yandex') {
-    yandex.value = { service, keyValue: value, updatedAt: new Date().toISOString() }
-    yandexValue.value = ''
-  } else {
-    openRouter.value = { service, keyValue: value, updatedAt: new Date().toISOString() }
-    openRouterValue.value = ''
-  }
+  yandexValue.value = ''
+  openRouterValue.value = ''
   editing.value = ''
 }
 
-async function removeKey(id: string) {
-  await $api.delete(`/api-keys/${id}`)
-  await fetchAll()
+async function remove(service: string) {
+  await $api.delete(`/credentials/${service}`)
+  if (service === 'yandex') yandex.value = null
+  else openRouter.value = null
 }
 
 fetchAll()
@@ -136,9 +117,6 @@ fetchAll()
 
 <style scoped>
 h1 { font-size: 1.25rem; margin: 0 0 1rem; }
-h2 { font-size: 1.1rem; margin: 2rem 0 0.25rem; }
-
-.hint { font-size: 0.8rem; color: #6b7280; margin: 0 0 1rem; }
 
 .card {
   background: white;
@@ -165,6 +143,8 @@ h2 { font-size: 1.1rem; margin: 2rem 0 0.25rem; }
 .field .value { display: flex; align-items: center; gap: 0.5rem; }
 
 .meta { font-size: 0.75rem; color: #9ca3af; }
+
+button.delete { color: #dc2626; }
 
 .edit-form {
   display: flex;
@@ -193,7 +173,7 @@ button {
 }
 
 button.small { background: transparent; color: #2563eb; padding: 0; font-size: 0.75rem; }
-button.delete { background: #dc2626; }
+button.small.delete { background: transparent; color: #dc2626; }
 button.cancel { background: #6b7280; }
 
 code { background: #f3f4f6; padding: 0.125rem 0.375rem; border-radius: 2px; font-size: 0.75rem; }

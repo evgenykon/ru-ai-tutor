@@ -68,6 +68,35 @@ model ServiceCredential {
   @@map("service_credentials")
 }
 
+model Assistant {
+  id          String   @id @default(cuid())
+  name        String
+  prompt      String
+  model       String
+  temperature Float?   @default(0.7)
+  service     String   @default("open-router")
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("assistants")
+}
+
+model UsageLog {
+  id        String   @id @default(cuid())
+  service   String
+  model     String?
+  tokens    Int?
+  cost      Float?
+  endpoint  String?
+  status    Int?
+  createdAt DateTime @default(now())
+
+  @@index([service])
+  @@index([createdAt])
+  @@map("usage_logs")
+}
+
 model ApiKey {
   id         String    @id @default(cuid())
   name       String

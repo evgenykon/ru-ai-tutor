@@ -6,9 +6,11 @@
       </div>
 
       <nav style="flex: 1; padding: 0.5rem; display: flex; flex-direction: column; gap: 2px;">
-        <NuxtLink to="/" style="display: block; padding: 0.5rem 0.75rem; color: #94a3b8; text-decoration: none; border-radius: 4px; font-size: 0.875rem;">Дашборд</NuxtLink>
-        <NuxtLink to="/users" style="display: block; padding: 0.5rem 0.75rem; color: #94a3b8; text-decoration: none; border-radius: 4px; font-size: 0.875rem;">Пользователи</NuxtLink>
-        <NuxtLink to="/api-keys" style="display: block; padding: 0.5rem 0.75rem; color: #94a3b8; text-decoration: none; border-radius: 4px; font-size: 0.875rem;">Ключи</NuxtLink>
+        <NuxtLink to="/" :style="linkStyle('/')">Дашборд</NuxtLink>
+        <NuxtLink to="/users" :style="linkStyle('/users')">Пользователи</NuxtLink>
+        <NuxtLink to="/api-keys" :style="linkStyle('/api-keys')">Ключи</NuxtLink>
+        <NuxtLink to="/assistants" :style="linkStyle('/assistants')">Ассистенты</NuxtLink>
+        <NuxtLink to="/usage" :style="linkStyle('/usage')">Использование</NuxtLink>
       </nav>
 
       <div style="padding: 1rem; border-top: 1px solid #334155;">
@@ -24,6 +26,20 @@
 
 <script setup lang="ts">
 const store = useAuthStore()
+const route = useRoute()
+
+function linkStyle(path: string) {
+  const active = route.path === path
+  return {
+    display: 'block' as const,
+    padding: '0.5rem 0.75rem',
+    color: active ? '#fff' : '#94a3b8',
+    textDecoration: 'none',
+    borderRadius: '4px',
+    fontSize: '0.875rem',
+    background: active ? '#334155' : 'transparent',
+  }
+}
 
 async function logout() {
   await store.logout()

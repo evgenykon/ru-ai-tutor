@@ -17,10 +17,22 @@ export async function upsert(request: FastifyRequest, reply: FastifyReply) {
     where: { service },
     update: { keyValue },
     create: { service, keyValue },
-    select: { id: true, service: true, updatedAt: true },
+    select: { id: true, service: true, keyValue: true, updatedAt: true },
   })
 
   return { credential: cred }
+}
+
+export async function remove(request: FastifyRequest, reply: FastifyReply) {
+  const { service } = request.params as { service: string }
+
+  try {
+    await prisma.serviceCredential.delete({ where: { service } })
+  } catch {
+    return reply.status(404).send({ error: 'Not found' })
+  }
+
+  return { success: true }
 }
 
 export async function getByService(request: FastifyRequest, reply: FastifyReply) {

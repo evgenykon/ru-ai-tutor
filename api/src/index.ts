@@ -4,6 +4,8 @@ import { authRoutes } from './routes/auth.routes'
 import { userRoutes } from './routes/user.routes'
 import { apiKeyRoutes } from './routes/api-key.routes'
 import { credentialRoutes } from './routes/credential.routes'
+import { usageRoutes } from './routes/usage.routes'
+import { assistantRoutes } from './routes/assistant.routes'
 
 const app = Fastify({ logger: true })
 
@@ -15,6 +17,8 @@ app.register(authRoutes)
 app.register(userRoutes)
 app.register(apiKeyRoutes)
 app.register(credentialRoutes)
+app.register(usageRoutes)
+app.register(assistantRoutes)
 
 async function start() {
   try {
