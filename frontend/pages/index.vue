@@ -1,5 +1,9 @@
 <template>
   <div>
-    <h1>ru-ai-tutor</h1>
+    <h1>Дашборд</h1>
   </div>
 </template>
+
+<script setup lang="ts">
+definePageMeta({ middleware: 'auth' })
+</script>
