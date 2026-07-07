@@ -7,6 +7,7 @@
 
       <nav class="nav">
         <NuxtLink to="/" class="nav-link">Дашборд</NuxtLink>
+        <NuxtLink to="/users" class="nav-link">Пользователи</NuxtLink>
       </nav>
 
       <div class="sidebar-footer">
