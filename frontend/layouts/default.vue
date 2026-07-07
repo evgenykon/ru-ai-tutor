@@ -8,7 +8,7 @@
       <nav style="flex: 1; padding: 0.5rem; display: flex; flex-direction: column; gap: 2px;">
         <NuxtLink to="/" style="display: block; padding: 0.5rem 0.75rem; color: #94a3b8; text-decoration: none; border-radius: 4px; font-size: 0.875rem;">Дашборд</NuxtLink>
         <NuxtLink to="/users" style="display: block; padding: 0.5rem 0.75rem; color: #94a3b8; text-decoration: none; border-radius: 4px; font-size: 0.875rem;">Пользователи</NuxtLink>
-        <NuxtLink to="/api-keys" style="display: block; padding: 0.5rem 0.75rem; color: #94a3b8; text-decoration: none; border-radius: 4px; font-size: 0.875rem;">API ключи</NuxtLink>
+        <NuxtLink to="/api-keys" style="display: block; padding: 0.5rem 0.75rem; color: #94a3b8; text-decoration: none; border-radius: 4px; font-size: 0.875rem;">Ключи</NuxtLink>
       </nav>
 
       <div style="padding: 1rem; border-top: 1px solid #334155;">

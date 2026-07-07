@@ -59,6 +59,15 @@ model UserRole {
   @@map("user_roles")
 }
 
+model ServiceCredential {
+  id        String   @id @default(cuid())
+  service   String   @unique
+  keyValue  String   @map("key_value")
+  updatedAt DateTime @updatedAt
+
+  @@map("service_credentials")
+}
+
 model ApiKey {
   id         String    @id @default(cuid())
   name       String
