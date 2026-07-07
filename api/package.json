@@ -32,6 +32,7 @@
     "ioredis": "^5.10.1",
     "joi": "^17.13.3",
     "jsonwebtoken": "^9.0.3",
+    "dotenv": "^16.4.7",
     "pino": "^10.0.0",
     "prom-client": "^15.1.3"
   },
