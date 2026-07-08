@@ -244,7 +244,7 @@ async function logUsage(service: string, model: string, usage: any) {
         service,
         model,
         tokens: usage?.total_tokens ?? null,
-        cost: null,
+        cost: usage?.total_cost ?? null,
         endpoint: 'chat',
         status: 200,
       },
