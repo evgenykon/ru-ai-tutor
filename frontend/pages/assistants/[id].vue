@@ -92,11 +92,71 @@
       </div>
 
       <div class="layout-right">
-        <div class="avatar-zone" @click="showAvatarModal = true">
-          <img v-if="assistant.avatar" :src="avatarsMap[assistant.avatar]?.url" class="avatar-img" />
-          <div v-else class="avatar-placeholder">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 1 0-16 0"/></svg>
-            <span>Выбрать</span>
+        <div class="media-row">
+          <div class="upload-block">
+            <span class="upload-block-label">Аватар</span>
+            <div class="avatar-zone" @click="showAvatarModal = true">
+              <img v-if="assistant.avatar" :src="avatarsMap[assistant.avatar]?.url" class="avatar-img" />
+              <div v-else class="upload-placeholder">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 1 0-16 0"/></svg>
+                <span>Выбрать</span>
+              </div>
+            </div>
+            <button v-if="assistant.avatar" type="button" class="block-reset" @click="assistant.avatar = null">Сбросить</button>
+          </div>
+
+          <div class="upload-block">
+            <span class="upload-block-label">Видео «Молчание»</span>
+            <label class="video-zone" :class="{ attached: assistant.silenceVideo }">
+              <input type="file" accept="video/mp4,video/webm,video/ogg" style="display:none" @change="uploadVideo($event, 'silenceVideo')" />
+              <video v-if="assistant.silenceVideo" :src="assistant.silenceVideo" muted preload="auto" class="video-preview" @click.prevent="toggleVideo($event)" />
+              <div v-else class="upload-placeholder">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                <span>Нажмите для загрузки</span>
+              </div>
+            </label>
+            <button v-if="assistant.silenceVideo" type="button" class="block-reset" @click="assistant.silenceVideo = null">Сбросить</button>
+          </div>
+
+          <div class="upload-block">
+            <span class="upload-block-label">Видео «Разговор»</span>
+            <label class="video-zone" :class="{ attached: assistant.talkVideo }">
+              <input type="file" accept="video/mp4,video/webm,video/ogg" style="display:none" @change="uploadVideo($event, 'talkVideo')" />
+              <video v-if="assistant.talkVideo" :src="assistant.talkVideo" muted preload="auto" class="video-preview" @click.prevent="toggleVideo($event)" />
+              <div v-else class="upload-placeholder">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                <span>Нажмите для загрузки</span>
+              </div>
+            </label>
+            <button v-if="assistant.talkVideo" type="button" class="block-reset" @click="assistant.talkVideo = null">Сбросить</button>
+          </div>
+        </div>
+
+        <div class="media-row">
+          <div class="upload-block">
+            <span class="upload-block-label">Видео «Похвала»</span>
+            <label class="video-zone" :class="{ attached: assistant.praiseVideo }">
+              <input type="file" accept="video/mp4,video/webm,video/ogg" style="display:none" @change="uploadVideo($event, 'praiseVideo')" />
+              <video v-if="assistant.praiseVideo" :src="assistant.praiseVideo" muted preload="auto" class="video-preview" @click.prevent="toggleVideo($event)" />
+              <div v-else class="upload-placeholder">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                <span>Нажмите для загрузки</span>
+              </div>
+            </label>
+            <button v-if="assistant.praiseVideo" type="button" class="block-reset" @click="assistant.praiseVideo = null">Сбросить</button>
+          </div>
+
+          <div class="upload-block">
+            <span class="upload-block-label">Видео «Отрицание»</span>
+            <label class="video-zone" :class="{ attached: assistant.denialVideo }">
+              <input type="file" accept="video/mp4,video/webm,video/ogg" style="display:none" @change="uploadVideo($event, 'denialVideo')" />
+              <video v-if="assistant.denialVideo" :src="assistant.denialVideo" muted preload="auto" class="video-preview" @click.prevent="toggleVideo($event)" />
+              <div v-else class="upload-placeholder">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                <span>Нажмите для загрузки</span>
+              </div>
+            </label>
+            <button v-if="assistant.denialVideo" type="button" class="block-reset" @click="assistant.denialVideo = null">Сбросить</button>
           </div>
         </div>
       </div>
@@ -285,6 +345,43 @@ function selectAvatar(id: string) {
   showAvatarModal.value = false
 }
 
+const videoUploading = ref<'silenceVideo' | 'talkVideo' | 'praiseVideo' | 'denialVideo' | null>(null)
+
+function toggleVideo(e: MouseEvent) {
+  const video = e.currentTarget as HTMLVideoElement
+  if (video.paused) { video.play() } else { video.pause() }
+}
+
+function preloadVideos() {
+  if (!assistant.value) return
+  const urls = [assistant.value.silenceVideo, assistant.value.talkVideo, assistant.value.praiseVideo, assistant.value.denialVideo].filter(Boolean)
+  for (const url of urls) {
+    const el = document.createElement('video')
+    el.preload = 'auto'
+    el.muted = true
+    el.src = url
+    el.load()
+  }
+}
+
+async function uploadVideo(event: Event, field: 'silenceVideo' | 'talkVideo' | 'praiseVideo' | 'denialVideo') {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  videoUploading.value = field
+  try {
+    const form = new FormData()
+    form.append('file', file)
+    const { data } = await $api.post('/upload', form, { headers: { 'Content-Type': 'multipart/form-data' } })
+    assistant.value[field] = data.url
+  } catch {
+    saveError.value = 'Ошибка загрузки видео'
+  } finally {
+    videoUploading.value = null
+    input.value = ''
+  }
+}
+
 const hasChanges = computed(() => {
   if (!original.value || !assistant.value) return false
   return original.value.name !== assistant.value.name
@@ -292,6 +389,10 @@ const hasChanges = computed(() => {
     || original.value.model !== assistant.value.model
     || original.value.temperature !== assistant.value.temperature
     || original.value.avatar !== assistant.value.avatar
+    || original.value.silenceVideo !== assistant.value.silenceVideo
+    || original.value.talkVideo !== assistant.value.talkVideo
+    || original.value.praiseVideo !== assistant.value.praiseVideo
+    || original.value.denialVideo !== assistant.value.denialVideo
     || original.value.speechRate !== assistant.value.speechRate
     || original.value.active !== assistant.value.active
     || original.value.ttsModel !== assistant.value.ttsModel
@@ -302,7 +403,7 @@ const hasChanges = computed(() => {
 async function fetchAssistant() {
   try {
     const { data } = await $api.get(`/assistants/${route.params.id}`)
-    assistant.value = { ...data.assistant, speechRate: data.assistant.speechRate ?? 1.0, ttsModel: data.assistant.ttsModel || '', service: data.assistant.service || 'open-router' }
+    assistant.value = { ...data.assistant, speechRate: data.assistant.speechRate ?? 1.0, ttsModel: data.assistant.ttsModel || '', service: data.assistant.service || 'open-router', silenceVideo: data.assistant.silenceVideo || null, talkVideo: data.assistant.talkVideo || null, praiseVideo: data.assistant.praiseVideo || null, denialVideo: data.assistant.denialVideo || null }
     if (data.assistant.model) {
       const { data: modelsData } = await $api.get('/yandex-models')
       allModels.value = modelsData.models
@@ -314,8 +415,9 @@ async function fetchAssistant() {
       allVoices.value = voicesData.voices
       voiceSearch.value = allVoices.value.find((v: any) => v.id === data.assistant.ttsVoice)?.name || data.assistant.ttsVoice
     }
-    original.value = { name: data.assistant.name, prompt: data.assistant.prompt, model: data.assistant.model, ttsModel: data.assistant.ttsModel, ttsVoice: data.assistant.ttsVoice, temperature: data.assistant.temperature, avatar: data.assistant.avatar, speechRate: data.assistant.speechRate ?? 1.0, active: data.assistant.active, service: data.assistant.service || 'open-router' }
-    await fetchAvatars()
+    original.value = { name: data.assistant.name, prompt: data.assistant.prompt, model: data.assistant.model, ttsModel: data.assistant.ttsModel, ttsVoice: data.assistant.ttsVoice, temperature: data.assistant.temperature, avatar: data.assistant.avatar, silenceVideo: data.assistant.silenceVideo || null, talkVideo: data.assistant.talkVideo || null, praiseVideo: data.assistant.praiseVideo || null, denialVideo: data.assistant.denialVideo || null, speechRate: data.assistant.speechRate ?? 1.0, active: data.assistant.active, service: data.assistant.service || 'open-router' }
+    preloadVideos()
+  await fetchAvatars()
   } catch {
     error.value = 'Ассистент не найден'
   }
@@ -333,6 +435,10 @@ async function save() {
       temperature: assistant.value.temperature,
       active: assistant.value.active,
       avatar: assistant.value.avatar || null,
+      silenceVideo: assistant.value.silenceVideo || null,
+      talkVideo: assistant.value.talkVideo || null,
+      praiseVideo: assistant.value.praiseVideo || null,
+      denialVideo: assistant.value.denialVideo || null,
       speechRate: assistant.value.speechRate ?? null,
       ttsModel: assistant.value.ttsModel || null,
       ttsVoice: assistant.value.ttsVoice || null,
@@ -415,11 +521,54 @@ fetchAssistant()
 
 .layout-left { flex: 1; max-width: 600px; }
 
-.layout-right { flex-shrink: 0; }
+.layout-right {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  flex-shrink: 0;
+  align-items: flex-start;
+}
+
+.media-row {
+  display: flex;
+  gap: 1rem;
+  flex-shrink: 0;
+}
+
+.upload-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+
+
+.upload-block-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #475569;
+  margin-bottom: 0.4rem;
+  align-self: flex-start;
+}
+
+.block-reset {
+  margin-top: 0.35rem;
+  padding: 0.2rem 0.5rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  background: white;
+  color: #94a3b8;
+  font-size: 0.7rem;
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
+  align-self: flex-start;
+}
+
+.block-reset:hover { background: #fef2f2; color: #dc2626; border-color: #fecaca; }
 
 .avatar-zone {
   width: 200px;
-  aspect-ratio: 2 / 3;
+  height: 300px;
   border: 2px dashed #d1d5db;
   border-radius: 8px;
   display: flex;
@@ -435,7 +584,7 @@ fetchAssistant()
 
 .avatar-img { width: 100%; height: 100%; object-fit: cover; }
 
-.avatar-placeholder {
+.upload-placeholder {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -638,4 +787,30 @@ fetchAssistant()
 
 .error { color: #dc2626; }
 .loading { color: #6b7280; }
+
+.video-zone {
+  width: 200px;
+  height: 300px;
+  border: 2px dashed #d1d5db;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  overflow: hidden;
+  transition: border-color 0.15s;
+  background: #f9fafb;
+  position: relative;
+}
+
+.video-zone:hover { border-color: #93c5fd; }
+
+.video-zone.attached { border-style: solid; border-color: #bbf7d0; background: #f0fdf4; }
+
+.video-preview {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+}
 </style>

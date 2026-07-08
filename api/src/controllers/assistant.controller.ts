@@ -77,6 +77,10 @@ export async function update(request: FastifyRequest, reply: FastifyReply) {
     temperature?: number
     active?: boolean
     avatar?: string | null
+    silenceVideo?: string | null
+    talkVideo?: string | null
+    praiseVideo?: string | null
+    denialVideo?: string | null
     speechRate?: number | null
     ttsModel?: string | null
     ttsVoice?: string | null
@@ -97,6 +101,10 @@ export async function update(request: FastifyRequest, reply: FastifyReply) {
       ...(body.temperature !== undefined && { temperature: body.temperature }),
       ...(body.active !== undefined && { active: body.active }),
       ...(body.avatar !== undefined && { avatar: body.avatar }),
+      ...(body.silenceVideo !== undefined && { silenceVideo: body.silenceVideo }),
+      ...(body.talkVideo !== undefined && { talkVideo: body.talkVideo }),
+      ...(body.praiseVideo !== undefined && { praiseVideo: body.praiseVideo }),
+      ...(body.denialVideo !== undefined && { denialVideo: body.denialVideo }),
       ...(body.speechRate !== undefined && { speechRate: body.speechRate }),
       ...(body.ttsModel !== undefined && { ttsModel: body.ttsModel }),
       ...(body.ttsVoice !== undefined && { ttsVoice: body.ttsVoice }),

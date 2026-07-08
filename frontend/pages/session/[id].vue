@@ -4,38 +4,60 @@
     <div class="start-card" @click.stop>
       <div class="start-avatar-wrap">
         <img v-if="avatarUrl" :src="avatarUrl" class="start-avatar" />
+        <div v-if="videosLoading" class="start-avatar-loader">
+          <div class="spinner" />
+        </div>
       </div>
       <div class="start-card-body">
         <div class="start-card-name">{{ assistant?.name || 'Ассистент' }}</div>
         <div class="start-card-course">{{ session?.course?.name }}</div>
         <div v-if="session?.course?.description" class="start-card-desc">{{ session.course.description }}</div>
-        <button class="start-button" @click="start">Начать урок</button>
+        <button class="start-button" :disabled="videosLoading" @click="start">{{ videosLoading ? 'Загрузка...' : hasSavedProgress ? 'Продолжить' : 'Начать урок' }}</button>
       </div>
     </div>
   </div>
-  <div v-if="session" class="session-page">
+  <div v-if="session" class="session-page" :class="{ 'with-stepbar': steps.length > 0 && mode === 'reading' }">
     <div class="session-header">
       <h2>{{ session.course.name }}</h2>
       <span class="session-status">Сессия активна</span>
-      <button v-if="isPlaying" class="tts-btn playing" title="Остановить" @click="stopTts">⏹</button>
-      <button v-else-if="currentStep.assistantText" class="tts-btn" title="Озвучить" @click="playTts">🔊</button>
       <div v-if="mode === 'discussion'" class="mic-indicator">
         <div class="mic-bar" :style="{ width: micVolume * 100 + '%' }" />
       </div>
-      <button class="mode-btn" :class="mode === 'discussion' ? 'discussion' : 'reading'" @click="toggleMode">
-        {{ mode === 'reading' ? '📖 Чтение' : '💬 Дискуссия' }}
-      </button>
       <span class="socket-status" :class="socketStatus">{{ socketStatus === 'connected' ? '✓ Подключено' : socketStatus === 'connecting' ? '⋯ Подключение...' : '✗ Отключено' }}</span>
     </div>
 
     <div class="session-layout">
-      <aside class="session-sidebar">
-        <div v-if="avatarUrl" class="assistant-avatar-wrap">
-          <img :src="avatarUrl" class="assistant-avatar" />
-          <div v-if="currentStep.assistantText" ref="avatarTextRef" class="avatar-text-overlay">
-            <div class="avatar-text-inner">{{ currentStep.assistantText }}</div>
+      <main class="session-main">
+        <template v-if="activeLessonId && steps.length > 0">
+          <div class="step-slide">
+            <div v-if="currentStep.slideType === 'text'" class="slide-text">{{ currentStep.slideContent }}</div>
+            <img v-else-if="currentStep.slideType === 'image'" :src="currentStep.slideContent" class="slide-image" />
+            <iframe v-else-if="currentStep.slideType === 'pdf'" :src="currentStep.slideContent" class="slide-pdf" />
+            <div v-else class="slide-text">{{ currentStep.slideContent }}</div>
           </div>
+        </template>
+        <template v-else-if="activeLessonId">
+          <p class="session-placeholder">У этого урока нет шагов</p>
+        </template>
+        <template v-else>
+          <p class="session-placeholder">Загрузка первого урока...</p>
+        </template>
+      </main>
+    </div>
+
+    <aside class="session-sidebar">
+      <div class="assistant-avatar-wrap">
+        <div v-if="!started" class="sidebar-avatar-placeholder" />
+        <template v-if="started && silenceVideoUrl && talkVideoUrl">
+          <video :src="silenceVideoUrl" muted autoplay loop playsinline preload="auto" class="assistant-video" v-show="!isPlaying" />
+          <video :src="talkVideoUrl" muted autoplay loop playsinline preload="auto" class="assistant-video" v-show="isPlaying" />
+        </template>
+        <img v-else-if="started && avatarUrl" :src="avatarUrl" class="assistant-avatar" />
+        <div v-if="currentStep.assistantText && mode !== 'discussion' && started" ref="avatarTextRef" class="avatar-text-overlay">
+          <div class="avatar-text-inner">{{ currentStep.assistantText }}</div>
         </div>
+      </div>
+      <div class="session-modules-list">
         <div v-for="m in session.course.modules" :key="m.id" class="session-module">
           <div class="session-module-title">{{ m.name }}</div>
           <div
@@ -49,33 +71,34 @@
             {{ l.title }}
           </div>
         </div>
-      </aside>
+      </div>
+    </aside>
 
-      <main class="session-main">
-        <template v-if="activeLessonId && steps.length > 0">
-          <div class="step-slide" :class="{ 'step-slide-pdf': currentStep.slideType === 'pdf', 'step-slide-discussion': mode === 'discussion' }">
-            <div v-if="currentStep.slideType === 'text'" class="slide-text">{{ currentStep.slideContent }}</div>
-            <img v-else-if="currentStep.slideType === 'image'" :src="currentStep.slideContent" class="slide-image" />
-            <iframe v-else-if="currentStep.slideType === 'pdf'" :src="currentStep.slideContent" class="slide-pdf" />
-            <div v-else class="slide-text">{{ currentStep.slideContent }}</div>
+    <aside v-show="chatVisible" class="chat-sidebar">
+      <div class="chat-header">Чат</div>
+      <div ref="chatRef" class="chat-messages">
+        <div v-for="(m, i) in messages" :key="i" class="chat-msg" :class="m.role">
+          <div v-if="m.context" class="chat-msg-context">
+            Модуль {{ m.context.module }} · Урок {{ m.context.lesson }} · Шаг {{ m.context.step }}
           </div>
-        </template>
-        <template v-else-if="activeLessonId">
-          <p class="session-placeholder">У этого урока нет шагов</p>
-        </template>
-        <template v-else>
-          <p class="session-placeholder">Загрузка первого урока...</p>
-        </template>
-        <div v-if="mode === 'discussion'" ref="chatRef" class="chat-area">
-          <div v-for="(m, i) in messages" :key="i" class="chat-msg" :class="m.role">
-            <div class="chat-bubble">{{ m.text }}</div>
-          </div>
-          <div v-if="interimText" class="chat-msg user">
-            <div class="chat-bubble interim">{{ interimText }}</div>
-          </div>
+          <div class="chat-bubble">{{ m.text }}</div>
         </div>
-      </main>
-    </div>
+      </div>
+      <form class="chat-input-row" @submit.prevent="sendChatMessage">
+        <input
+          v-model="chatInput"
+          class="chat-input"
+          type="text"
+          placeholder="Введите сообщение..."
+          autocomplete="off"
+        />
+        <button type="submit" class="chat-send-btn" :disabled="!chatInput.trim()">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">
+            <path d="M3.4 20.4l17.45-7.48a1 1 0 0 0 0-1.84L3.4 3.6a1 1 0 0 0-1.39 1.21L4.5 11 12 12l-7.5 1-2.49 6.19a1 1 0 0 0 1.39 1.21z" />
+          </svg>
+        </button>
+      </form>
+    </aside>
 
     <div v-if="steps.length > 0 && mode === 'reading'" class="step-progress-bar">
       <div
@@ -92,22 +115,24 @@
         <div class="step-progress-title">{{ step.title || `Шаг ${idx + 1}` }}</div>
       </div>
     </div>
-
-    <div v-if="steps.length > 0" class="step-nav">
-      <button :disabled="currentStepIndex === 0" class="nav-btn" @click="prevStep">Назад</button>
-      <span class="step-counter">{{ currentStepIndex + 1 }} / {{ steps.length }}</span>
-      <button :disabled="currentStepIndex === steps.length - 1" class="nav-btn" @click="nextStep">Вперёд</button>
-    </div>
   </div>
   <div v-else class="loading">Загрузка сессии...</div>
-    <button
-      v-if="mode === 'discussion' && started"
-      class="ptt-btn"
-      :class="{ recording: isRecording }"
-      @pointerdown="pushToTalkStart"
-      @pointerup="pushToTalkEnd"
-      @pointerleave="pushToTalkEnd"
-    >{{ isRecording ? 'Отпустите' : '🎤' }}</button>
+  <SessionControls
+    v-if="started && session"
+    :is-playing="isPlaying"
+    :is-recording="isRecording"
+    :can-go-prev="steps.length > 0 && currentStepIndex > 0"
+    :can-go-next="steps.length > 0 && currentStepIndex < steps.length - 1"
+    :can-play="!!currentStep.assistantText"
+    :chat-open="chatVisible"
+    :mic-granted="micPermissionGranted"
+    @prev="prevStep"
+    @next="nextStep"
+    @toggle-chat="chatVisible = !chatVisible"
+    @toggle-playback="togglePlayback"
+    @ptt-start="pushToTalkStart"
+    @ptt-end="pushToTalkEnd"
+  />
   </div>
 </template>
 
@@ -126,10 +151,15 @@ const micVolume = ref(0)
 const mode = ref<'reading' | 'discussion'>('reading')
 const avatarsMap = ref<Record<string, { url: string }>>({})
 const avatarTextRef = ref<HTMLElement | null>(null)
-const messages = ref<{ role: string; text: string }[]>([])
+const messages = ref<{ role: string; text: string; context?: { module: string; lesson: string; step: number } }[]>([])
 const isRecording = ref(false)
+const micPermissionGranted = ref(false)
+const chatInput = ref('')
+const chatVisible = ref(false)
+const videosLoading = ref(false)
+const hasSavedProgress = ref(false)
 
-const { interimText, finalText, start: startStt, stop: stopStt, reset: resetStt } = useSpeechRecognition()
+const { interimText, onInterim, onResult, start: startStt, stop: stopStt, reset: resetStt } = useSpeechRecognition()
 let micStream: MediaStream | null = null
 let micAnalyser: AnalyserNode | null = null
 let textScrollId: number | null = null
@@ -145,6 +175,9 @@ const avatarUrl = computed(() => {
   return id ? avatarsMap.value[id]?.url : null
 })
 
+const silenceVideoUrl = computed(() => assistant.value?.silenceVideo || null)
+const talkVideoUrl = computed(() => assistant.value?.talkVideo || null)
+
 async function fetchAvatars() {
   try {
     const { data } = await $api.get('/avatars')
@@ -158,9 +191,28 @@ async function fetchSession() {
   try {
     const { data } = await $api.get(`/sessions/${route.params.id}`)
     session.value = data.session
+    preloadSessionVideos()
   } catch {
     socketStatus.value = 'disconnected'
   }
+}
+
+async function preloadSessionVideos() {
+  const a = session.value?.course?.assistant
+  const urls = [a?.silenceVideo, a?.talkVideo, a?.praiseVideo, a?.denialVideo].filter(Boolean)
+  if (!urls.length) { videosLoading.value = false; return }
+  videosLoading.value = true
+  const promises = urls.map(url => new Promise<void>(resolve => {
+    const el = document.createElement('video')
+    el.preload = 'auto'
+    el.muted = true
+    el.oncanplaythrough = () => resolve()
+    el.onerror = () => resolve()
+    el.src = url
+    el.load()
+  }))
+  await Promise.race([Promise.all(promises), new Promise<void>(r => setTimeout(r, 10000))])
+  videosLoading.value = false
 }
 
 function stopMic() {
@@ -173,6 +225,7 @@ function stopMic() {
 async function enableMic() {
   try {
     micStream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    micPermissionGranted.value = true
     const ctx = new AudioContext()
     const src = ctx.createMediaStreamSource(micStream)
     const analyser = ctx.createAnalyser()
@@ -181,7 +234,18 @@ async function enableMic() {
     micAnalyser = analyser
     tickVolume()
   } catch {
-    discussionEnabled.value = false
+    micPermissionGranted.value = false
+  }
+}
+
+async function requestMicPermission() {
+  if (micPermissionGranted.value) return
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    stream.getTracks().forEach(t => t.stop())
+    micPermissionGranted.value = true
+  } catch {
+    micPermissionGranted.value = false
   }
 }
 
@@ -210,40 +274,154 @@ function toggleMode() {
   }
 }
 
+function togglePlayback() {
+  if (isPlaying.value) {
+    stopTts()
+  } else {
+    playTts()
+  }
+}
+
 function onKeyDown(e: KeyboardEvent) {
-  if (e.key === 'p' || e.key === 'P' || e.key === 'п' || e.key === 'П') {
+  if (e.repeat) return
+  if (e.code === 'KeyP' || e.key === 'p' || e.key === 'P' || e.key === 'з' || e.key === 'З') {
+    if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return
     e.preventDefault()
     pushToTalkStart()
   }
 }
 
 function onKeyUp(e: KeyboardEvent) {
-  if (e.key === 'p' || e.key === 'P' || e.key === 'п' || e.key === 'П') {
+  if (e.code === 'KeyP' || e.key === 'p' || e.key === 'P' || e.key === 'з' || e.key === 'З') {
+    if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return
+    e.preventDefault()
     pushToTalkEnd()
   }
 }
 
 async function start() {
   started.value = true
+  await requestMicPermission()
   connectSocket()
-  autoStartFirstLesson()
-  window.addEventListener('keydown', onKeyDown)
-  window.addEventListener('keyup', onKeyUp)
+  if (!activeLessonId.value) {
+    autoStartFirstLesson()
+  }
+  try {
+    document.addEventListener('keydown', onKeyDown)
+    document.addEventListener('keyup', onKeyUp)
+  } catch { /* ignore */ }
 }
 
+function getCurrentStepContext() {
+  if (!activeLessonId.value || !session.value) return null
+  for (const mod of session.value.course?.modules || []) {
+    for (const lesson of mod.lessons) {
+      if (lesson.id === activeLessonId.value) {
+        return {
+          module: mod.name,
+          lesson: lesson.title,
+          step: currentStepIndex.value + 1,
+        }
+      }
+    }
+  }
+  return null
+}
+
+function storageKey(sessionId: string, key: string) {
+  return `session-${sessionId}-${key}`
+}
+
+function loadMessagesFromStorage(sessionId: string) {
+  try {
+    const raw = localStorage.getItem(storageKey(sessionId, 'messages'))
+    if (raw) return JSON.parse(raw)
+  } catch { /* ignore */ }
+  return []
+}
+
+function saveMessagesToStorage(sessionId: string, msgs: typeof messages.value) {
+  try {
+    localStorage.setItem(storageKey(sessionId, 'messages'), JSON.stringify(msgs))
+  } catch { /* ignore */ }
+}
+
+function loadProgressFromStorage(sessionId: string): { activeLessonId: string; currentStepIndex: number } | null {
+  try {
+    const raw = localStorage.getItem(storageKey(sessionId, 'progress'))
+    if (raw) return JSON.parse(raw)
+  } catch { /* ignore */ }
+  return null
+}
+
+function saveProgressToStorage(sessionId: string, progress: { activeLessonId: string; currentStepIndex: number }) {
+  try {
+    localStorage.setItem(storageKey(sessionId, 'progress'), JSON.stringify(progress))
+  } catch { /* ignore */ }
+}
+
+async function restoreSessionState() {
+  if (!session.value) return
+  const sessionId = session.value.id
+
+  const savedMessages = loadMessagesFromStorage(sessionId)
+  if (savedMessages.length > 0) {
+    messages.value = savedMessages
+  }
+
+  const savedProgress = loadProgressFromStorage(sessionId)
+  if (savedProgress) {
+    hasSavedProgress.value = true
+    activeLessonId.value = savedProgress.activeLessonId
+    await selectLesson(savedProgress.activeLessonId)
+    if (savedProgress.currentStepIndex < steps.value.length) {
+      currentStepIndex.value = savedProgress.currentStepIndex
+    }
+  }
+}
+
+function sendChatMessage() {
+  const text = chatInput.value.trim()
+  if (!text || !ws || ws.readyState !== WebSocket.OPEN) return
+  messages.value.push({ role: 'user', text })
+  const a = assistant.value
+  ws.send(JSON.stringify({
+    type: 'user-message',
+    text,
+    assistantId: a?.id,
+    voice: a?.ttsVoice || undefined,
+    speed: a?.speechRate ?? 1,
+  }))
+  chatInput.value = ''
+}
+
+let pttAccumulated = ''
+
 function pushToTalkStart() {
+  chatVisible.value = true
+  chatInput.value = ''
+  pttAccumulated = ''
   if (mode.value !== 'discussion') toggleMode()
   stopTts()
   resetStt()
-  startStt()
-  isRecording.value = true
+  onResult.value = (text: string) => {
+    pttAccumulated = text
+  }
+  onInterim.value = (text: string) => {
+    chatInput.value = text
+  }
+  if (startStt()) {
+    isRecording.value = true
+  } else {
+    chatInput.value = 'Распознавание не поддерживается в этом браузере'
+  }
 }
 
 function pushToTalkEnd() {
   if (!isRecording.value) return
   isRecording.value = false
+  const text = pttAccumulated || interimText.value.trim()
   stopStt()
-  const text = finalText.value.trim()
   if (text) {
     messages.value.push({ role: 'user', text })
     const a = assistant.value
@@ -255,6 +433,7 @@ function pushToTalkEnd() {
       speed: a?.speechRate ?? 1,
     }))
   }
+  chatInput.value = ''
 }
 
 async function selectLesson(lessonId: string) {
@@ -451,6 +630,14 @@ function stopTextScroll() {
 
 const chatRef = ref<HTMLElement | null>(null)
 
+watch(chatVisible, (visible) => {
+  if (visible) {
+    nextTick(() => {
+      if (chatRef.value) chatRef.value.scrollTop = chatRef.value.scrollHeight
+    })
+  }
+})
+
 watch(messages, () => {
   nextTick(() => {
     if (chatRef.value) chatRef.value.scrollTop = chatRef.value.scrollHeight
@@ -463,7 +650,34 @@ watch(currentStep, () => {
     (avatarTextRef.value.firstElementChild as HTMLElement).style.transform = ''
   }
   if (currentStep.value?.assistantText) {
+    const text = currentStep.value.assistantText
+    if (!messages.value.some(m => m.role === 'assistant' && m.text === text)) {
+      messages.value.push({
+        role: 'assistant',
+        text,
+        context: getCurrentStepContext() ?? undefined,
+      })
+    }
     playTts()
+  }
+})
+
+watch(session, (newSession) => {
+  if (newSession) restoreSessionState()
+}, { immediate: true })
+
+watch(messages, (msgs) => {
+  if (session.value) saveMessagesToStorage(session.value.id, msgs)
+}, { deep: true })
+
+watch([activeLessonId, currentStepIndex], async ([lessonId, stepIdx]) => {
+  if (session.value && lessonId) {
+    saveProgressToStorage(session.value.id, { activeLessonId: lessonId, currentStepIndex: stepIdx })
+    try {
+      await $api.patch(`/sessions/${session.value.id}/progress`, {
+        progress: { activeLessonId: lessonId, currentStepIndex: stepIdx },
+      })
+    } catch { /* ignore */ }
   }
 })
 
@@ -471,8 +685,8 @@ onUnmounted(() => {
   stopTts()
   stopMic()
   stopTextScroll()
-  window.removeEventListener('keydown', onKeyDown)
-  window.removeEventListener('keyup', onKeyUp)
+  document.removeEventListener('keydown', onKeyDown)
+  document.removeEventListener('keyup', onKeyUp)
   if (ws) ws.close()
 })
 
@@ -505,15 +719,46 @@ fetchSession()
 }
 
 .start-avatar-wrap {
+  position: relative;
   width: 100%;
   border-radius: 20px 20px 0 0;
   line-height: 0;
+}
+
+.start-avatar-loader {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 20px 20px 0 0;
+}
+
+.spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 .start-avatar {
   width: 100%;
   aspect-ratio: 2/3;
   object-fit: cover;
+  display: block;
+}
+
+.sidebar-avatar-placeholder {
+  width: 100%;
+  aspect-ratio: 2/3;
+  background: #064e3b;
   display: block;
 }
 
@@ -576,9 +821,10 @@ fetchSession()
   width: 100%;
 }
 
-.start-button:hover { background: #1d4ed8; }
+.start-button:disabled { background: #93c5fd; cursor: default; }
+.start-button:hover:not(:disabled) { background: #1d4ed8; }
 
-.session-page { display: flex; flex-direction: column; height: 100%; }
+.session-page { display: flex; flex-direction: column; height: 100%; padding-left: 240px; }
 
 .session-header {
   display: flex;
@@ -598,36 +844,6 @@ fetchSession()
   font-weight: 500;
 }
 
-.tts-btn {
-  margin-left: auto;
-  background: #f1f5f9;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  padding: 0.3rem 0.6rem;
-  cursor: pointer;
-  font-size: 0.85rem;
-  line-height: 1;
-}
-
-.tts-btn:hover { background: #e2e8f0; }
-.tts-btn.playing { background: #dbeafe; border-color: #2563eb; }
-
-.mode-btn {
-  padding: 0.25rem 0.5rem;
-  border-radius: 6px;
-  border: 1px solid #d1d5db;
-  cursor: pointer;
-  font-size: 0.75rem;
-  font-weight: 500;
-  background: #f1f5f9;
-  color: #475569;
-  white-space: nowrap;
-}
-
-.mode-btn.reading { background: #dbeafe; border-color: #2563eb; color: #1d4ed8; }
-.mode-btn.discussion { background: #f0fdf4; border-color: #16a34a; color: #15803d; }
-.mode-btn:hover { opacity: 0.85; }
-
 .session-layout {
   display: flex;
   gap: 1.5rem;
@@ -636,25 +852,47 @@ fetchSession()
 }
 
 .session-sidebar {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 240px;
   width: 240px;
-  flex-shrink: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
   background: white;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
   padding: 1rem;
+  overflow: hidden;
+}
+
+.session-page.with-stepbar .session-sidebar {
+  bottom: 56px;
+}
+
+.session-modules-list {
+  flex: 1;
   overflow-y: auto;
+  min-height: 0;
 }
 
 .assistant-avatar-wrap {
   position: relative;
   width: 100%;
-  margin-bottom: 1rem;
   border-radius: 8px;
   overflow: hidden;
   line-height: 0;
+  flex-shrink: 0;
 }
 
 .assistant-avatar {
+  width: 100%;
+  display: block;
+}
+
+.assistant-video {
   width: 100%;
   display: block;
 }
@@ -731,29 +969,64 @@ fetchSession()
 }
 
 .step-slide {
-  width: 100%;
-  flex: 1;
+  aspect-ratio: 2 / 3;
+  max-width: 100%;
+  max-height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.step-slide-discussion { flex: none; }
+.chat-sidebar {
+  position: fixed;
+  right: 1.5rem;
+  top: 5vh;
+  bottom: 64px;
+  width: 340px;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+}
 
-.chat-area {
-  width: 100%;
+.chat-header {
+  padding: 0.75rem 1rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #475569;
+  border-bottom: 1px solid #e2e8f0;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  flex-shrink: 0;
+}
+
+.chat-messages {
   flex: 1;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  padding: 0.5rem 0;
+  padding: 0.75rem;
   min-height: 0;
 }
 
-.chat-msg { display: flex; }
-.chat-msg.user { justify-content: flex-end; }
-.chat-msg.assistant { justify-content: flex-start; }
+.chat-msg { display: flex; flex-direction: column; }
+.chat-msg.user { align-items: flex-end; }
+.chat-msg.assistant { align-items: flex-start; }
+
+.chat-msg-context {
+  font-size: 0.65rem;
+  color: #94a3b8;
+  margin-bottom: 0.2rem;
+  padding: 0 0.4rem;
+  letter-spacing: 0.01em;
+  max-width: 80%;
+}
+
+
 
 .chat-bubble {
   max-width: 80%;
@@ -766,23 +1039,72 @@ fetchSession()
 
 .chat-msg.user .chat-bubble { background: #2563eb; color: white; border-bottom-right-radius: 4px; }
 .chat-msg.assistant .chat-bubble { background: #f1f5f9; color: #1e293b; border-bottom-left-radius: 4px; }
-.chat-msg.user .chat-bubble.interim { opacity: 0.6; }
+
+.chat-input-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.75rem;
+  border-top: 1px solid #e2e8f0;
+  flex-shrink: 0;
+  background: white;
+}
+
+.chat-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-family: inherit;
+  color: #1e293b;
+  background: white;
+  outline: none;
+  transition: border-color 0.1s, box-shadow 0.1s;
+}
+
+.chat-input::placeholder { color: #94a3b8; }
+
+.chat-input:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.chat-send-btn {
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: #2563eb;
+  color: white;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.1s, transform 0.05s;
+}
+
+.chat-send-btn:hover:not(:disabled) { background: #1d4ed8; }
+.chat-send-btn:active:not(:disabled) { transform: scale(0.95); }
+.chat-send-btn:disabled { opacity: 0.4; cursor: default; }
 
 .slide-text {
   font-size: 0.9rem;
   color: #334155;
   line-height: 1.6;
   white-space: pre-wrap;
-  max-width: 600px;
+  max-width: 100%;
   text-align: center;
+  padding: 1rem;
 }
 
-.slide-image { width: 100%; aspect-ratio: 3/2; object-fit: cover; border-radius: 8px; }
-
-.step-slide-pdf {
-  align-self: stretch;
-  align-items: stretch;
-  flex: 1;
+.slide-image {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 8px;
 }
 
 .slide-pdf {
@@ -790,7 +1112,6 @@ fetchSession()
   height: 100%;
   border: none;
   border-radius: 8px;
-  flex: 1;
 }
 
 .session-placeholder {
@@ -812,13 +1133,19 @@ fetchSession()
 
 .step-progress-bar {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow-x: auto;
   gap: 0.25rem;
-  margin-top: 1rem;
-  padding: 0.75rem 1rem;
+  padding: 0.5rem 1.5rem;
   background: white;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
+  border-top: 1px solid #e2e8f0;
+  position: fixed;
+  bottom: 0;
+  left: 240px;
+  right: 0;
+  height: 56px;
+  align-items: center;
+  z-index: 40;
 }
 
 .step-progress-item {
@@ -857,61 +1184,6 @@ fetchSession()
 
 .step-progress-item.active .step-progress-title { color: #2563eb; font-weight: 600; }
 .step-progress-item.completed .step-progress-title { color: #16a34a; }
-
-.step-nav {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 1rem;
-  margin-top: 0.75rem;
-}
-
-.nav-btn {
-  padding: 0.4rem 1rem;
-  background: #f8fafc;
-  color: #475569;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 0.8rem;
-  font-weight: 500;
-}
-
-.nav-btn:hover:not(:disabled) { background: #f1f5f9; border-color: #94a3b8; }
-.nav-btn:disabled { opacity: 0.4; cursor: default; }
-
-.step-counter {
-  font-size: 0.8rem;
-  color: #64748b;
-  font-weight: 500;
-}
-
-.ptt-btn {
-  position: fixed;
-  bottom: 1.5rem;
-  right: 1.5rem;
-  width: 60px;
-  height: 60px;
-  border-radius: 50%;
-  background: #2563eb;
-  color: white;
-  border: none;
-  font-size: 1.3rem;
-  cursor: pointer;
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
-  z-index: 100;
-  transition: transform 0.1s, background 0.1s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.ptt-btn:active,
-.ptt-btn.recording {
-  background: #dc2626;
-  transform: scale(1.1);
-  box-shadow: 0 4px 16px rgba(220, 38, 38, 0.5);
-}
 
 .loading { color: #6b7280; padding: 2rem; font-size: 0.875rem; }
 </style>

@@ -12,6 +12,7 @@
         <NuxtLink to="/usage" :style="linkStyle('/usage')">Использование</NuxtLink>
         <NuxtLink to="/assistants" :style="linkStyle('/assistants')">Ассистенты</NuxtLink>
         <NuxtLink to="/courses" :style="linkStyle('/courses')">Курсы</NuxtLink>
+        <NuxtLink to="/sessions" :style="linkStyle('/sessions')">Сессии</NuxtLink>
       </nav>
 
       <div style="padding: 1rem; border-top: 1px solid #334155;">

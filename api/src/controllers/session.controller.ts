@@ -39,3 +39,37 @@ export async function getById(request: FastifyRequest, reply: FastifyReply) {
   if (!item) return reply.status(404).send({ error: 'Сессия не найдена' })
   return { session: item }
 }
+
+export async function list(request: FastifyRequest) {
+  const items = await prisma.session.findMany({
+    where: { userId: request.user!.userId },
+    orderBy: { updatedAt: 'desc' },
+    include: {
+      course: {
+        select: { id: true, name: true },
+      },
+    },
+  })
+  return { sessions: items }
+}
+
+export async function updateProgress(request: FastifyRequest, reply: FastifyReply) {
+  const { id } = request.params as { id: string }
+  const { progress } = request.body as { progress: Record<string, unknown> }
+
+  const item = await prisma.session.findFirst({
+    where: { id, userId: request.user!.userId },
+  })
+  if (!item) return reply.status(404).send({ error: 'Сессия не найдена' })
+
+  const updated = await prisma.session.update({
+    where: { id },
+    data: { progress },
+    include: {
+      course: {
+        select: { id: true, name: true },
+      },
+    },
+  })
+  return { session: updated }
+}

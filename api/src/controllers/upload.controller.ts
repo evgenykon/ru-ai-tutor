@@ -2,7 +2,7 @@ import { FastifyRequest, FastifyReply } from 'fastify'
 import path from 'path'
 import { randomUUID } from 'crypto'
 
-const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf']
+const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf', 'video/mp4', 'video/webm', 'video/ogg']
 const UPLOAD_DIR = path.join(__dirname, '..', '..', 'uploads')
 
 export async function uploadFile(request: FastifyRequest, reply: FastifyReply) {

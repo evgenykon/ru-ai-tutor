@@ -98,6 +98,7 @@ model Session {
   userId    String   @map("user_id")
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   status    String   @default("active")
+  progress  Json?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -148,23 +149,27 @@ model LessonStep {
 }
 
 model Assistant {
-  id          String           @id @default(cuid())
-  name        String
-  prompt      String
-  model       String
-  ttsModel    String?          @map("tts_model")
-  ttsVoice    String?          @map("tts_voice")
-  ttsRole     String?          @map("tts_role")
-  ttsPitch    Int?             @default(0) @map("tts_pitch")
-  temperature Float?           @default(0.7)
-  service     String           @default("open-router")
-  active      Boolean          @default(true)
-  avatar      String?
-  speechRate  Float?           @default(1.0) @map("speech_rate")
-  courses     Course[]
-  users       UserAssistant[]
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
+  id            String           @id @default(cuid())
+  name          String
+  prompt        String
+  model         String
+  ttsModel      String?          @map("tts_model")
+  ttsVoice      String?          @map("tts_voice")
+  ttsRole       String?          @map("tts_role")
+  ttsPitch      Int?             @default(0) @map("tts_pitch")
+  temperature   Float?           @default(0.7)
+  service       String           @default("open-router")
+  active        Boolean          @default(true)
+  avatar        String?
+  silenceVideo  String?          @map("silence_video")
+  talkVideo     String?          @map("talk_video")
+  praiseVideo   String?          @map("praise_video")
+  denialVideo   String?          @map("denial_video")
+  speechRate    Float?           @default(1.0) @map("speech_rate")
+  courses       Course[]
+  users         UserAssistant[]
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
 
   @@map("assistants")
 }
