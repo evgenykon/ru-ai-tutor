@@ -239,12 +239,17 @@ async function chatYandex(assistant: any, messages: ChatMessage[], reply: Fastif
 
 async function logUsage(service: string, model: string, usage: any) {
   try {
+    const tokens = usage?.total_tokens ?? null
+    let cost = usage?.total_cost ?? null
+    if (cost == null && tokens != null) {
+      cost = (tokens / 1000000) * 0.5
+    }
     await prisma.usageLog.create({
       data: {
         service,
         model,
-        tokens: usage?.total_tokens ?? null,
-        cost: usage?.total_cost ?? null,
+        tokens,
+        cost,
         endpoint: 'chat',
         status: 200,
       },

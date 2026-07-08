@@ -52,12 +52,13 @@ export async function synthesize(request: FastifyRequest, reply: FastifyReply) {
 async function logTtsUsage(voice: string, text: string) {
   try {
     const chars = text.length
+    const cost = (chars / 1000000) * 0.016
     await prisma.usageLog.create({
       data: {
         service: 'yandex',
         model: `tts:${voice}`,
         tokens: chars,
-        cost: null,
+        cost,
         endpoint: 'tts',
         status: 200,
       },
