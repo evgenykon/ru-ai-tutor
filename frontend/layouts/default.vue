@@ -31,7 +31,8 @@ const store = useAuthStore()
 const route = useRoute()
 
 function linkStyle(path: string) {
-  const active = path === '/' ? route.path === '/' : route.path.startsWith(path)
+  const p = route.path.replace(/\/$/, '')
+  const active = path === '/' ? p === '' : p === path || p.startsWith(path + '/')
   return {
     display: 'block' as const,
     padding: '0.5rem 0.75rem',
