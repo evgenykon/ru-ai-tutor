@@ -1,4 +1,10 @@
+interface ChatMessage {
+  role: 'system' | 'user' | 'assistant'
+  content: string
+}
+
 const sessions = new Map<string, Set<WebSocket>>()
+const chatHistory = new Map<string, ChatMessage[]>()
 
 const server = Bun.serve({
   port: 3002,
@@ -34,9 +40,7 @@ const server = Bun.serve({
       const clients = sessions.get(sessionId)
       if (!clients) return
 
-      // Handle binary (audio) messages
       if (typeof message !== 'string') {
-        // Broadcast audio to all other clients in the session
         for (const client of clients) {
           if (client !== ws && client.readyState === WebSocket.OPEN) {
             client.send(message)
@@ -51,6 +55,14 @@ const server = Bun.serve({
       } catch {
         ws.send(JSON.stringify({ type: 'error', payload: 'invalid JSON' }))
         return
+      }
+
+      // Broadcast all JSON messages to other clients
+      const textJson = JSON.stringify(parsed)
+      for (const client of clients) {
+        if (client !== ws && client.readyState === WebSocket.OPEN) {
+          client.send(textJson)
+        }
       }
 
       if (parsed.type === 'tts-request') {
@@ -86,12 +98,74 @@ const server = Bun.serve({
         return
       }
 
-      // Broadcast JSON message to all other clients
-      const text = JSON.stringify(parsed)
-      for (const client of clients) {
-        if (client !== ws && client.readyState === WebSocket.OPEN) {
-          client.send(text)
+      if (parsed.type === 'user-message') {
+        console.log(`[session ${sessionId}] user-message: ${(parsed.text || '').slice(0, 60)}...`)
+        if (!parsed.assistantId) {
+          ws.send(JSON.stringify({ type: 'error', payload: 'assistantId required' }))
+          return
         }
+
+        if (!chatHistory.has(sessionId)) {
+          chatHistory.set(sessionId, [])
+        }
+        const history = chatHistory.get(sessionId)!
+        history.push({ role: 'user', content: parsed.text })
+        if (history.length > 20) history.splice(0, history.length - 20)
+
+        try {
+          const llmRes = await fetch('http://api:3001/internal/llm/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              assistantId: parsed.assistantId,
+              messages: history.slice(-10),
+            }),
+          })
+
+          if (!llmRes.ok) {
+            const err = await llmRes.text().catch(() => '')
+            console.log(`[session ${sessionId}] llm-error: ${llmRes.status} ${err.slice(0, 200)}`)
+            ws.send(JSON.stringify({ type: 'error', payload: 'LLM failed' }))
+            return
+          }
+
+          const llmJson: any = await llmRes.json()
+          const replyText = llmJson.text || ''
+
+          history.push({ role: 'assistant', content: replyText })
+
+          // Broadcast assistant message to all clients
+          const assistMsg = JSON.stringify({ type: 'assistant-message', text: replyText })
+          for (const client of clients) {
+            if (client.readyState === WebSocket.OPEN) {
+              client.send(assistMsg)
+            }
+          }
+
+          // If TTS voice is configured, synthesize and broadcast audio
+          if (parsed.voice) {
+            const ttsRes = await fetch('http://api:3001/internal/tts/synthesize', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                text: replyText,
+                voice: parsed.voice,
+                speed: parsed.speed ?? 1,
+              }),
+            })
+            if (ttsRes.ok) {
+              const audio = await ttsRes.arrayBuffer()
+              for (const client of clients) {
+                if (client.readyState === WebSocket.OPEN) {
+                  client.send(audio)
+                }
+              }
+            }
+          }
+        } catch (e: any) {
+          ws.send(JSON.stringify({ type: 'error', payload: e.message || 'LLM failed' }))
+        }
+        return
       }
     },
     close(ws) {
@@ -99,7 +173,10 @@ const server = Bun.serve({
       const clients = sessions.get(sessionId)
       if (clients) {
         clients.delete(ws)
-        if (clients.size === 0) sessions.delete(sessionId)
+        if (clients.size === 0) {
+          sessions.delete(sessionId)
+          chatHistory.delete(sessionId)
+        }
       }
       console.log(`client disconnected from session ${sessionId}`)
     },

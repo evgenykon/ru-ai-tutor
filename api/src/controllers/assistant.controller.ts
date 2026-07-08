@@ -73,6 +73,7 @@ export async function update(request: FastifyRequest, reply: FastifyReply) {
     name?: string
     prompt?: string
     model?: string
+    service?: string
     temperature?: number
     active?: boolean
     avatar?: string | null
@@ -99,6 +100,7 @@ export async function update(request: FastifyRequest, reply: FastifyReply) {
       ...(body.speechRate !== undefined && { speechRate: body.speechRate }),
       ...(body.ttsModel !== undefined && { ttsModel: body.ttsModel }),
       ...(body.ttsVoice !== undefined && { ttsVoice: body.ttsVoice }),
+      ...(body.service !== undefined && { service: body.service }),
     },
   })
 

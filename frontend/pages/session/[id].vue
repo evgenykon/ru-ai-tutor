@@ -9,13 +9,6 @@
         <div class="start-card-name">{{ assistant?.name || 'Ассистент' }}</div>
         <div class="start-card-course">{{ session?.course?.name }}</div>
         <div v-if="session?.course?.description" class="start-card-desc">{{ session.course.description }}</div>
-        <label class="discussion-label">
-          <input v-model="discussionEnabled" type="checkbox" />
-          Хочу вести дискуссию
-        </label>
-        <div v-if="discussionEnabled" class="mic-indicator">
-          <div class="mic-bar" :style="{ width: micVolume * 100 + '%' }" />
-        </div>
         <button class="start-button" @click="start">Начать урок</button>
       </div>
     </div>
@@ -26,6 +19,12 @@
       <span class="session-status">Сессия активна</span>
       <button v-if="isPlaying" class="tts-btn playing" title="Остановить" @click="stopTts">⏹</button>
       <button v-else-if="currentStep.assistantText" class="tts-btn" title="Озвучить" @click="playTts">🔊</button>
+      <div v-if="mode === 'discussion'" class="mic-indicator">
+        <div class="mic-bar" :style="{ width: micVolume * 100 + '%' }" />
+      </div>
+      <button class="mode-btn" :class="mode === 'discussion' ? 'discussion' : 'reading'" @click="toggleMode">
+        {{ mode === 'reading' ? '📖 Чтение' : '💬 Дискуссия' }}
+      </button>
       <span class="socket-status" :class="socketStatus">{{ socketStatus === 'connected' ? '✓ Подключено' : socketStatus === 'connecting' ? '⋯ Подключение...' : '✗ Отключено' }}</span>
     </div>
 
@@ -54,7 +53,7 @@
 
       <main class="session-main">
         <template v-if="activeLessonId && steps.length > 0">
-          <div class="step-slide" :class="{ 'step-slide-pdf': currentStep.slideType === 'pdf' }">
+          <div class="step-slide" :class="{ 'step-slide-pdf': currentStep.slideType === 'pdf', 'step-slide-discussion': mode === 'discussion' }">
             <div v-if="currentStep.slideType === 'text'" class="slide-text">{{ currentStep.slideContent }}</div>
             <img v-else-if="currentStep.slideType === 'image'" :src="currentStep.slideContent" class="slide-image" />
             <iframe v-else-if="currentStep.slideType === 'pdf'" :src="currentStep.slideContent" class="slide-pdf" />
@@ -67,10 +66,18 @@
         <template v-else>
           <p class="session-placeholder">Загрузка первого урока...</p>
         </template>
+        <div v-if="mode === 'discussion'" ref="chatRef" class="chat-area">
+          <div v-for="(m, i) in messages" :key="i" class="chat-msg" :class="m.role">
+            <div class="chat-bubble">{{ m.text }}</div>
+          </div>
+          <div v-if="interimText" class="chat-msg user">
+            <div class="chat-bubble interim">{{ interimText }}</div>
+          </div>
+        </div>
       </main>
     </div>
 
-    <div v-if="steps.length > 0" class="step-progress-bar">
+    <div v-if="steps.length > 0 && mode === 'reading'" class="step-progress-bar">
       <div
         v-for="(step, idx) in steps"
         :key="step.id"
@@ -93,6 +100,14 @@
     </div>
   </div>
   <div v-else class="loading">Загрузка сессии...</div>
+    <button
+      v-if="mode === 'discussion' && started"
+      class="ptt-btn"
+      :class="{ recording: isRecording }"
+      @pointerdown="pushToTalkStart"
+      @pointerup="pushToTalkEnd"
+      @pointerleave="pushToTalkEnd"
+    >{{ isRecording ? 'Отпустите' : '🎤' }}</button>
   </div>
 </template>
 
@@ -107,10 +122,14 @@ const currentStepIndex = ref(0)
 const socketStatus = ref<'connecting' | 'connected' | 'disconnected'>('connecting')
 const isPlaying = ref(false)
 const started = ref(false)
-const discussionEnabled = ref(false)
 const micVolume = ref(0)
+const mode = ref<'reading' | 'discussion'>('reading')
 const avatarsMap = ref<Record<string, { url: string }>>({})
 const avatarTextRef = ref<HTMLElement | null>(null)
+const messages = ref<{ role: string; text: string }[]>([])
+const isRecording = ref(false)
+
+const { interimText, finalText, start: startStt, stop: stopStt, reset: resetStt } = useSpeechRecognition()
 let micStream: MediaStream | null = null
 let micAnalyser: AnalyserNode | null = null
 let textScrollId: number | null = null
@@ -179,15 +198,63 @@ function tickVolume() {
   micAnimationId = requestAnimationFrame(tickVolume)
 }
 
-watch(discussionEnabled, (val) => {
-  if (val) enableMic()
-  else stopMic()
-})
+function toggleMode() {
+  if (mode.value === 'reading') {
+    mode.value = 'discussion'
+    stopTts()
+    stopTextScroll()
+    enableMic()
+  } else {
+    mode.value = 'reading'
+    stopMic()
+  }
+}
+
+function onKeyDown(e: KeyboardEvent) {
+  if (e.key === 'p' || e.key === 'P' || e.key === 'п' || e.key === 'П') {
+    e.preventDefault()
+    pushToTalkStart()
+  }
+}
+
+function onKeyUp(e: KeyboardEvent) {
+  if (e.key === 'p' || e.key === 'P' || e.key === 'п' || e.key === 'П') {
+    pushToTalkEnd()
+  }
+}
 
 async function start() {
   started.value = true
   connectSocket()
   autoStartFirstLesson()
+  window.addEventListener('keydown', onKeyDown)
+  window.addEventListener('keyup', onKeyUp)
+}
+
+function pushToTalkStart() {
+  if (mode.value !== 'discussion') toggleMode()
+  stopTts()
+  resetStt()
+  startStt()
+  isRecording.value = true
+}
+
+function pushToTalkEnd() {
+  if (!isRecording.value) return
+  isRecording.value = false
+  stopStt()
+  const text = finalText.value.trim()
+  if (text) {
+    messages.value.push({ role: 'user', text })
+    const a = assistant.value
+    ws?.send(JSON.stringify({
+      type: 'user-message',
+      text,
+      assistantId: a?.id,
+      voice: a?.ttsVoice || undefined,
+      speed: a?.speechRate ?? 1,
+    }))
+  }
 }
 
 async function selectLesson(lessonId: string) {
@@ -245,6 +312,10 @@ function advanceStep() {
       }
     }
     if (found) break
+  }
+  if (!found) {
+    mode.value = 'discussion'
+    enableMic()
   }
 }
 
@@ -311,7 +382,7 @@ function connectSocket() {
         stopTextScroll()
         isPlaying.value = false
         audioEl = null
-        setTimeout(() => advanceStep(), 800)
+        if (mode.value === 'reading') setTimeout(() => advanceStep(), 800)
       }
 
       currentAudio.onerror = () => {
@@ -328,6 +399,9 @@ function connectSocket() {
 
     try {
       const msg = JSON.parse(event.data)
+      if (msg.type === 'assistant-message') {
+        messages.value.push({ role: 'assistant', text: msg.text })
+      }
       console.log('socket message:', msg)
     } catch {
       console.log('socket raw:', event.data)
@@ -375,6 +449,14 @@ function stopTextScroll() {
   if (textScrollId) { cancelAnimationFrame(textScrollId); textScrollId = null }
 }
 
+const chatRef = ref<HTMLElement | null>(null)
+
+watch(messages, () => {
+  nextTick(() => {
+    if (chatRef.value) chatRef.value.scrollTop = chatRef.value.scrollHeight
+  })
+}, { deep: true })
+
 watch(currentStep, () => {
   stopTextScroll()
   if (avatarTextRef.value?.firstElementChild) {
@@ -389,6 +471,8 @@ onUnmounted(() => {
   stopTts()
   stopMic()
   stopTextScroll()
+  window.removeEventListener('keydown', onKeyDown)
+  window.removeEventListener('keyup', onKeyUp)
   if (ws) ws.close()
 })
 
@@ -463,24 +547,13 @@ fetchSession()
   overflow: hidden;
 }
 
-.discussion-label {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.8rem;
-  color: #475569;
-  cursor: pointer;
-  user-select: none;
-}
-
-.discussion-label input { accent-color: #2563eb; }
-
 .mic-indicator {
-  width: 100%;
+  width: 80px;
   height: 6px;
   background: #e2e8f0;
   border-radius: 3px;
   overflow: hidden;
+  flex-shrink: 0;
 }
 
 .mic-bar {
@@ -539,6 +612,22 @@ fetchSession()
 .tts-btn:hover { background: #e2e8f0; }
 .tts-btn.playing { background: #dbeafe; border-color: #2563eb; }
 
+.mode-btn {
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+  border: 1px solid #d1d5db;
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 500;
+  background: #f1f5f9;
+  color: #475569;
+  white-space: nowrap;
+}
+
+.mode-btn.reading { background: #dbeafe; border-color: #2563eb; color: #1d4ed8; }
+.mode-btn.discussion { background: #f0fdf4; border-color: #16a34a; color: #15803d; }
+.mode-btn:hover { opacity: 0.85; }
+
 .session-layout {
   display: flex;
   gap: 1.5rem;
@@ -567,11 +656,7 @@ fetchSession()
 
 .assistant-avatar {
   width: 100%;
-  aspect-ratio: 2/3;
-  object-fit: cover;
   display: block;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
 }
 
 .avatar-text-overlay {
@@ -641,7 +726,8 @@ fetchSession()
   align-items: center;
   justify-content: center;
   gap: 1rem;
-  overflow-y: auto;
+  overflow: hidden;
+  min-height: 0;
 }
 
 .step-slide {
@@ -652,6 +738,36 @@ fetchSession()
   justify-content: center;
 }
 
+.step-slide-discussion { flex: none; }
+
+.chat-area {
+  width: 100%;
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+  min-height: 0;
+}
+
+.chat-msg { display: flex; }
+.chat-msg.user { justify-content: flex-end; }
+.chat-msg.assistant { justify-content: flex-start; }
+
+.chat-bubble {
+  max-width: 80%;
+  padding: 0.5rem 0.75rem;
+  border-radius: 10px;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+
+.chat-msg.user .chat-bubble { background: #2563eb; color: white; border-bottom-right-radius: 4px; }
+.chat-msg.assistant .chat-bubble { background: #f1f5f9; color: #1e293b; border-bottom-left-radius: 4px; }
+.chat-msg.user .chat-bubble.interim { opacity: 0.6; }
+
 .slide-text {
   font-size: 0.9rem;
   color: #334155;
@@ -661,7 +777,7 @@ fetchSession()
   text-align: center;
 }
 
-.slide-image { max-width: 100%; max-height: 300px; object-fit: contain; border-radius: 8px; }
+.slide-image { width: 100%; aspect-ratio: 3/2; object-fit: cover; border-radius: 8px; }
 
 .step-slide-pdf {
   align-self: stretch;
@@ -768,6 +884,33 @@ fetchSession()
   font-size: 0.8rem;
   color: #64748b;
   font-weight: 500;
+}
+
+.ptt-btn {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: #2563eb;
+  color: white;
+  border: none;
+  font-size: 1.3rem;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+  z-index: 100;
+  transition: transform 0.1s, background 0.1s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ptt-btn:active,
+.ptt-btn.recording {
+  background: #dc2626;
+  transform: scale(1.1);
+  box-shadow: 0 4px 16px rgba(220, 38, 38, 0.5);
 }
 
 .loading { color: #6b7280; padding: 2rem; font-size: 0.875rem; }

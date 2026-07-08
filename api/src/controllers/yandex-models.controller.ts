@@ -23,7 +23,7 @@ const voices = [
   { id: 'yulduz_ru', name: 'Юлдуз (рус)', gender: 'female', lang: 'ru-RU' },
 ]
 
-export async function listYandexModels(request: FastifyRequest) {
+export async function listYandexModels(request: FastifyRequest, _reply: FastifyReply) {
   const query = request.query as { type?: string }
 
   const cred = query.type === 'tts'
@@ -43,13 +43,13 @@ export async function listYandexModels(request: FastifyRequest) {
     const json = await res.json() as { data: { id: string; owned_by?: string }[] }
     const all = json.data as { id: string }[]
     const filtered = all.filter(m => {
-      const clean = m.id.replace(/^gpt:\/\/[^/]+\//, '')
+      const clean = m.id.replace(/^[a-z]+:\/\/[^/]+\//, '').replace(/^[a-z]+:\/\//, '')
       if (query.type === 'tts') return clean.startsWith('speech-realtime')
-      return !clean.startsWith('speech-realtime') && !clean.startsWith('art://') && m.id.startsWith('gpt://')
+      return !clean.startsWith('speech-realtime') && !clean.startsWith('art://') && !clean.startsWith('img://')
     })
     return { models: filtered.map(m => {
-      const clean = m.id.replace(/^gpt:\/\/[^/]+\//, '')
-      return { id: clean, name: clean }
+      const clean = m.id.replace(/^[a-z]+:\/\/[^/]+\//, '').replace(/^[a-z]+:\/\//, '')
+      return { id: m.id, name: clean, service: 'yandex-ai' }
     }) }
   } catch {
     return { models: [] }

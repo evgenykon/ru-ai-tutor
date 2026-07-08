@@ -1,4 +1,5 @@
 <template>
+  <div>
   <div v-if="assistant">
     <div class="topbar">
       <input v-model="assistant.name" class="name-input" />
@@ -6,7 +7,7 @@
 
     <div class="status-bar">
       <div class="status-btns">
-        <button :class="['status-btn', { active: assistant.active }]" @click="tryActivate" :disabled="!canActivate">Активен</button>
+        <button :class="['status-btn', { active: assistant.active }]" :disabled="!canActivate" @click="tryActivate">Активен</button>
         <button :class="['status-btn', { active: !assistant.active }]" @click="assistant.active = false">Отключён</button>
       </div>
       <div v-if="activateError" class="activate-error">{{ activateError }}</div>
@@ -22,13 +23,13 @@
         <div class="field">
           <label>LLM модель</label>
           <div class="model-picker">
-            <input v-model="assistant.model" placeholder="Поиск..." @focus="openModelPicker('llm')" @input="filterModels('llm')" />
+            <input v-model="modelDisplay" placeholder="Поиск..." @focus="openModelPicker('llm')" @input="filterModels('llm')" />
             <div v-if="activePicker === 'llm'" class="model-dropdown">
               <div
                 v-for="m in filteredLlm"
                 :key="m.id"
                 :class="['model-option', { selected: assistant.model === m.id }]"
-                @click="selectModel('llm', m.id)"
+                @click="selectModel('llm', m.id, m.name)"
               >{{ m.name }}</div>
               <div v-if="!filteredLlm.length" class="model-option empty">Нет моделей</div>
             </div>
@@ -86,7 +87,7 @@
         </div>
 
         <div class="field">
-          <button @click="testTts" :disabled="ttsTesting" class="test-btn">{{ ttsTesting ? 'Генерация...' : '🔊 Test' }}</button>
+          <button :disabled="ttsTesting" class="test-btn" @click="testTts">{{ ttsTesting ? 'Генерация...' : '🔊 Test' }}</button>
         </div>
       </div>
 
@@ -103,8 +104,8 @@
 
     <div class="bottom-actions">
       <div v-if="saveError" class="save-error">{{ saveError }}</div>
-      <button @click="save" :disabled="!hasChanges || saving" class="save-btn">{{ saving ? 'Сохранение...' : 'Сохранить' }}</button>
-      <button @click="router.push('/assistants')" class="back-btn">Назад</button>
+      <button :disabled="!hasChanges || saving" class="save-btn" @click="save">{{ saving ? 'Сохранение...' : 'Сохранить' }}</button>
+      <button class="back-btn" @click="router.push('/assistants')">Назад</button>
     </div>
   </div>
 
@@ -127,11 +128,12 @@
           </div>
         </div>
         <div class="modal-actions">
-          <button @click="showAvatarModal = false" class="modal-close-btn">Закрыть</button>
+          <button class="modal-close-btn" @click="showAvatarModal = false">Закрыть</button>
         </div>
       </div>
     </div>
   </Teleport>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -148,6 +150,8 @@ const saveError = ref('')
 const ttsTesting = ref(false)
 const activateError = ref('')
 const activePicker = ref<'llm' | 'tts' | null>(null)
+const modelDisplay = ref('')
+const allModels = ref<{ id: string; name: string; service: string }[]>([])
 
 const canActivate = computed(() => {
   return assistant.value?.name?.trim()
@@ -182,10 +186,10 @@ const filteredLlm = ref<{ id: string; name: string }[]>([])
 const filteredTts = ref<{ id: string; name: string }[]>([])
 
 function filterModels(type: 'llm' | 'tts') {
-  const list = type === 'llm' ? llmModelList.value : ttsModelList.value
-  const q = (type === 'llm' ? assistant.value.model : assistant.value.ttsModel || '').toLowerCase()
+  const list = type === 'llm' ? llmModelList : ttsModelList
+  const q = (type === 'llm' ? modelDisplay.value : assistant.value.ttsModel || '').toLowerCase()
   const filtered = type === 'llm' ? filteredLlm : filteredTts
-  filtered.value = list.filter(m => m.id.toLowerCase().includes(q) || m.name.toLowerCase().includes(q))
+  filtered.value = list.value.filter(m => m.name.toLowerCase().includes(q))
 }
 
 async function openModelPicker(type: 'llm' | 'tts') {
@@ -195,8 +199,13 @@ async function openModelPicker(type: 'llm' | 'tts') {
   if (!list.value.length) {
     const { data } = await $api.get('/yandex-models', { params: { type: type === 'tts' ? 'tts' : undefined } })
     list.value = data.models
+    if (type === 'llm') allModels.value = data.models
   }
   filtered.value = list.value
+  if (type === 'llm' && assistant.value?.model) {
+    const found = allModels.value.find(m => m.id === assistant.value.model)
+    if (found) modelDisplay.value = found.name
+  }
 }
 
 function filterVoices() {
@@ -231,9 +240,12 @@ function selectVoice(id: string) {
   showVoicePicker.value = false
 }
 
-function selectModel(type: 'llm' | 'tts', id: string) {
-  if (type === 'llm') assistant.value.model = id
-  else assistant.value.ttsModel = id
+function selectModel(type: 'llm' | 'tts', id: string, name?: string) {
+  if (type === 'llm') {
+    assistant.value.model = id
+    assistant.value.service = 'yandex-ai'
+    modelDisplay.value = name || id
+  } else assistant.value.ttsModel = id
   activePicker.value = null
 }
 
@@ -265,7 +277,7 @@ async function fetchAvatars() {
   try {
     const { data } = await $api.get('/avatars')
     avatars.value = data.avatars
-  } catch {}
+  } catch { /* empty */ }
 }
 
 function selectAvatar(id: string) {
@@ -284,18 +296,25 @@ const hasChanges = computed(() => {
     || original.value.active !== assistant.value.active
     || original.value.ttsModel !== assistant.value.ttsModel
     || original.value.ttsVoice !== assistant.value.ttsVoice
+    || original.value.service !== assistant.value.service
 })
 
 async function fetchAssistant() {
   try {
     const { data } = await $api.get(`/assistants/${route.params.id}`)
-    assistant.value = { ...data.assistant, speechRate: data.assistant.speechRate ?? 1.0, ttsModel: data.assistant.ttsModel || '' }
+    assistant.value = { ...data.assistant, speechRate: data.assistant.speechRate ?? 1.0, ttsModel: data.assistant.ttsModel || '', service: data.assistant.service || 'open-router' }
+    if (data.assistant.model) {
+      const { data: modelsData } = await $api.get('/yandex-models')
+      allModels.value = modelsData.models
+      const found = allModels.value.find(m => m.id === data.assistant.model)
+      modelDisplay.value = found?.name || data.assistant.model.split('/').pop() || data.assistant.model
+    }
     if (data.assistant.ttsVoice) {
       const { data: voicesData } = await $api.get('/yandex-voices')
       allVoices.value = voicesData.voices
       voiceSearch.value = allVoices.value.find((v: any) => v.id === data.assistant.ttsVoice)?.name || data.assistant.ttsVoice
     }
-    original.value = { name: data.assistant.name, prompt: data.assistant.prompt, model: data.assistant.model, ttsModel: data.assistant.ttsModel, ttsVoice: data.assistant.ttsVoice, temperature: data.assistant.temperature, avatar: data.assistant.avatar, speechRate: data.assistant.speechRate ?? 1.0, active: data.assistant.active }
+    original.value = { name: data.assistant.name, prompt: data.assistant.prompt, model: data.assistant.model, ttsModel: data.assistant.ttsModel, ttsVoice: data.assistant.ttsVoice, temperature: data.assistant.temperature, avatar: data.assistant.avatar, speechRate: data.assistant.speechRate ?? 1.0, active: data.assistant.active, service: data.assistant.service || 'open-router' }
     await fetchAvatars()
   } catch {
     error.value = 'Ассистент не найден'
@@ -310,6 +329,7 @@ async function save() {
       name: assistant.value.name,
       prompt: assistant.value.prompt,
       model: assistant.value.model,
+      service: assistant.value.service || 'open-router',
       temperature: assistant.value.temperature,
       active: assistant.value.active,
       avatar: assistant.value.avatar || null,
@@ -317,7 +337,7 @@ async function save() {
       ttsModel: assistant.value.ttsModel || null,
       ttsVoice: assistant.value.ttsVoice || null,
     })
-    original.value = { name: assistant.value.name, prompt: assistant.value.prompt, model: assistant.value.model, ttsModel: assistant.value.ttsModel, ttsVoice: assistant.value.ttsVoice, temperature: assistant.value.temperature, avatar: assistant.value.avatar, speechRate: assistant.value.speechRate, active: assistant.value.active }
+    original.value = { name: assistant.value.name, prompt: assistant.value.prompt, model: assistant.value.model, ttsModel: assistant.value.ttsModel, ttsVoice: assistant.value.ttsVoice, temperature: assistant.value.temperature, avatar: assistant.value.avatar, speechRate: assistant.value.speechRate, active: assistant.value.active, service: assistant.value.service || 'open-router' }
   } catch (e: any) {
     saveError.value = e?.response?.data?.error || 'Ошибка сохранения'
   } finally {
