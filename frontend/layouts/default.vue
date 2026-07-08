@@ -32,7 +32,11 @@ const route = useRoute()
 
 function linkStyle(path: string) {
   const p = route.path.replace(/\/$/, '')
-  const active = path === '/' ? p === '' : p === path || p.startsWith(path + '/')
+  const active = path === '/'
+    ? p === ''
+    : path === '/sessions'
+      ? p === '/sessions' || p === '/session' || p.startsWith('/session/')
+      : p === path || p.startsWith(path + '/')
   return {
     display: 'block' as const,
     padding: '0.5rem 0.75rem',
