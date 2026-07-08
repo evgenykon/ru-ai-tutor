@@ -37,11 +37,12 @@ export async function create(request: FastifyRequest, reply: FastifyReply) {
 export async function update(request: FastifyRequest, reply: FastifyReply) {
   const { id } = request.params as { id: string }
   if (!await userCanAccessModule(request.user!.userId, id)) return reply.status(404).send({ error: 'Not found' })
-  const body = request.body as { name?: string; order?: number }
+  const body = request.body as { name?: string; description?: string; order?: number }
   const item = await prisma.module.update({
     where: { id },
     data: {
       ...(body.name !== undefined && { name: body.name }),
+      ...(body.description !== undefined && { description: body.description }),
       ...(body.order !== undefined && { order: body.order }),
     },
     include: { lessons: { orderBy: { order: 'asc' } } },

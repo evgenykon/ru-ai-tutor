@@ -44,6 +44,7 @@ model User {
   active         Boolean         @default(false)
   roles          UserRole[]
   courses        UserCourse[]
+  sessions       Session[]
   assistants     UserAssistant[]
   apiKeys        ApiKey[]
   createdAt      DateTime        @default(now())
@@ -82,6 +83,7 @@ model Course {
   assistantId String?        @map("assistant_id")
   assistant   Assistant?     @relation(fields: [assistantId], references: [id], onDelete: SetNull)
   modules     Module[]
+  sessions    Session[]
   users       UserCourse[]
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
@@ -89,29 +91,60 @@ model Course {
   @@map("courses")
 }
 
-model Module {
+model Session {
   id        String   @id @default(cuid())
   courseId   String   @map("course_id")
   course    Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  name      String
-  order     Int      @default(0)
-  lessons   Lesson[]
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status    String   @default("active")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@map("sessions")
+}
+
+model Module {
+  id          String   @id @default(cuid())
+  courseId     String   @map("course_id")
+  course      Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  order       Int      @default(0)
+  lessons     Lesson[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@map("modules")
 }
 
 model Lesson {
-  id       String @id @default(cuid())
-  moduleId  String @map("module_id")
-  module   Module @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  id        String       @id @default(cuid())
+  moduleId   String       @map("module_id")
+  module    Module       @relation(fields: [moduleId], references: [id], onDelete: Cascade)
   title     String
-  order     Int    @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  content   String?
+  order     Int          @default(0)
+  steps     LessonStep[]
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
 
   @@map("lessons")
+}
+
+model LessonStep {
+  id             String   @id @default(cuid())
+  lessonId       String   @map("lesson_id")
+  lesson         Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  order          Int      @default(0)
+  title          String   @default("")
+  slideType      String   @default("text") @map("slide_type")
+  slideContent   String?  @map("slide_content")
+  assistantText  String?  @map("assistant_text")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@map("lesson_steps")
 }
 
 model Assistant {
