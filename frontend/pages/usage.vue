@@ -38,7 +38,7 @@
       </thead>
       <tbody>
         <tr v-for="item in items" :key="item.id">
-          <td>{{ item.service === 'yandex' || item.service === 'yandex-ai' ? 'Yandex AI' : 'Open Router' }}</td>
+          <td>{{ item.service === 'yandex' ? 'Yandex TTS' : item.service === 'yandex-ai' ? 'Yandex AI' : 'Open Router' }}</td>
           <td>{{ item.model || '—' }}</td>
           <td>{{ item.tokens?.toLocaleString() || '—' }}</td>
           <td>{{ item.cost != null ? '$' + item.cost.toFixed(6) : '—' }}</td>

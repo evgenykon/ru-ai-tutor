@@ -42,8 +42,25 @@ export async function synthesize(request: FastifyRequest, reply: FastifyReply) {
     const audio = await res.arrayBuffer()
     reply.header('Content-Type', 'audio/ogg')
     reply.header('Content-Length', String(audio.byteLength))
+    logTtsUsage(body.voice, body.text || '')
     return reply.send(Buffer.from(audio))
   } catch (e: any) {
     return reply.status(502).send({ error: e.message || 'TTS failed' })
   }
+}
+
+async function logTtsUsage(voice: string, text: string) {
+  try {
+    const chars = text.length
+    await prisma.usageLog.create({
+      data: {
+        service: 'yandex',
+        model: `tts:${voice}`,
+        tokens: chars,
+        cost: null,
+        endpoint: 'tts',
+        status: 200,
+      },
+    })
+  } catch { /* empty */ }
 }
