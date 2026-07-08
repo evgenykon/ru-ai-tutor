@@ -30,10 +30,10 @@
       <main class="session-main">
         <template v-if="activeLessonId && steps.length > 0">
           <div class="step-slide">
-            <div v-if="currentStep.slideType === 'text'" class="slide-text">{{ currentStep.slideContent }}</div>
+            <div v-if="currentStep.slideType === 'text'" class="slide-text" v-html="renderMd(currentStep.slideContent || '')" />
             <img v-else-if="currentStep.slideType === 'image'" :src="currentStep.slideContent" class="slide-image" />
             <iframe v-else-if="currentStep.slideType === 'pdf'" :src="currentStep.slideContent" class="slide-pdf" />
-            <div v-else class="slide-text">{{ currentStep.slideContent }}</div>
+            <div v-else class="slide-text" v-html="renderMd(currentStep.slideContent || '')" />
           </div>
         </template>
         <template v-else-if="activeLessonId">
@@ -137,6 +137,12 @@
 </template>
 
 <script setup lang="ts">
+import MarkdownIt from 'markdown-it'
+const md = new MarkdownIt({ html: false, breaks: true, linkify: true })
+function renderMd(text: string) {
+  return md.render(text)
+}
+
 const { $api } = useNuxtApp()
 const route = useRoute()
 
@@ -961,20 +967,16 @@ fetchSession()
   padding: 2rem;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 1rem;
-  overflow: hidden;
   min-height: 0;
 }
 
 .step-slide {
-  aspect-ratio: 2 / 3;
-  max-width: 100%;
-  max-height: 100%;
+  width: 100%;
+  flex: 1;
+  overflow-y: auto;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .chat-sidebar {
@@ -1093,11 +1095,40 @@ fetchSession()
 .slide-text {
   font-size: 0.9rem;
   color: #334155;
-  line-height: 1.6;
-  white-space: pre-wrap;
+  line-height: 1.8;
   max-width: 100%;
-  text-align: center;
+  text-align: left;
   padding: 1rem;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.slide-text h1, .slide-text h2, .slide-text h3, .slide-text h4 {
+  color: #1e293b;
+  font-weight: 600;
+}
+
+.slide-text h1 { font-size: 1.3rem; margin-top: 0.25rem; }
+.slide-text h2 { font-size: 1.15rem; margin-top: 0.5rem; }
+.slide-text h3 { font-size: 1rem; }
+
+.slide-text ul, .slide-text ol {
+  text-align: left;
+  padding-left: 1.5rem;
+}
+
+.slide-text li { margin-bottom: 0.35rem; }
+
+.slide-text strong { font-weight: 700; color: #1e293b; }
+.slide-text em { font-style: italic; }
+.slide-text code {
+  background: #f1f5f9;
+  padding: 0.15rem 0.3rem;
+  border-radius: 3px;
+  font-size: 0.85em;
 }
 
 .slide-image {

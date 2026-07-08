@@ -29,11 +29,21 @@
       <NuxtLink :to="`/courses/${course.id}`" class="nav-item" :class="{ active: !$route.params.moduleId }">
         Настройки
       </NuxtLink>
+      <div class="nav-divider"></div>
+      <a class="nav-item add" @click="showAgent = true">🤖 Генератор</a>
     </aside>
 
     <main class="course-main">
       <NuxtPage />
     </main>
+
+    <CourseAIAgent
+      v-if="showAgent && courseAssistantId"
+      :assistant-id="courseAssistantId"
+      :course-data="course"
+      @close="showAgent = false; fetchCourse()"
+      @created="fetchCourse()"
+    />
 
     <Teleport to="body">
       <div v-if="showAddModule" class="modal-overlay" @click.self="showAddModule = false">
@@ -66,6 +76,9 @@ const expanded = ref<Record<string, boolean>>({})
 const showAddModule = ref(false)
 const newModuleName = ref('')
 const moduleInput = ref<HTMLInputElement | null>(null)
+const showAgent = ref(false)
+
+const courseAssistantId = computed(() => course.value?.assistantId || '')
 
 provide('course', course)
 provide('expanded', expanded)
