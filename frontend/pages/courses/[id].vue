@@ -26,8 +26,11 @@
         <a class="nav-item add" @click="showAddModule = true">+ Модуль</a>
       </nav>
       <div class="nav-divider"></div>
-      <NuxtLink :to="`/courses/${course.id}`" class="nav-item" :class="{ active: !$route.params.moduleId }">
+      <NuxtLink :to="`/courses/${course.id}`" class="nav-item" :class="{ active: !$route.params.moduleId && $route.path !== `/courses/${course.id}/cache` }">
         Настройки
+      </NuxtLink>
+      <NuxtLink :to="`/courses/${course.id}/cache`" class="nav-item" :class="{ active: $route.path === `/courses/${course.id}/cache` }">
+        Кэш
       </NuxtLink>
       <div class="nav-divider"></div>
       <a class="nav-item add" @click="showAgent = true">🤖 Генератор</a>

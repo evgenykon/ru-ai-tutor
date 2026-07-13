@@ -55,7 +55,7 @@ export async function list(request: FastifyRequest) {
 
 export async function updateProgress(request: FastifyRequest, reply: FastifyReply) {
   const { id } = request.params as { id: string }
-  const { progress } = request.body as { progress: Record<string, unknown> }
+  const { progress } = request.body as { progress: any }
 
   const item = await prisma.session.findFirst({
     where: { id, userId: request.user!.userId },
@@ -72,4 +72,17 @@ export async function updateProgress(request: FastifyRequest, reply: FastifyRepl
     },
   })
   return { session: updated }
+}
+
+export async function remove(request: FastifyRequest, reply: FastifyReply) {
+  const { id } = request.params as { id: string }
+  const isAdmin = request.user!.email === 'admin@admin.com'
+  const where: { id: string; userId?: string } = { id }
+  if (!isAdmin) where.userId = request.user!.userId
+
+  const item = await prisma.session.findFirst({ where })
+  if (!item) return reply.status(404).send({ error: 'Сессия не найдена' })
+
+  await prisma.session.delete({ where: { id } })
+  return { success: true }
 }

@@ -5,6 +5,76 @@ interface ChatMessage {
 
 const sessions = new Map<string, Set<WebSocket>>()
 const chatHistory = new Map<string, ChatMessage[]>()
+const pendingTtsByClient = new Map<WebSocket, Set<string>>()
+
+interface TtsParams {
+  text: string
+  voice: string
+  model: string
+  speed: number
+  courseId?: string
+}
+
+function hasPendingTtsHash(clients: Set<WebSocket>, hash: string): boolean {
+  for (const client of clients) {
+    if (pendingTtsByClient.get(client)?.has(hash)) return true
+  }
+  return false
+}
+
+async function synthesizeAndBroadcastTts(
+  sessionId: string,
+  params: TtsParams,
+  clients: Set<WebSocket>,
+  sendText?: string,
+): Promise<void> {
+  const startTime = Date.now()
+  const res = await fetch('http://api:3001/internal/tts/synthesize', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...params, cache: false }),
+  })
+  if (!res.ok) {
+    console.log(`[session ${sessionId}] tts-error: status=${res.status}`)
+    throw new Error(`TTS failed: ${res.status}`)
+  }
+
+  const cached = res.headers.get('X-TTS-Cached') === 'true'
+  const hash = res.headers.get('X-TTS-Hash')
+  const audio = await res.arrayBuffer()
+  console.log(`[session ${sessionId}] tts-response: ${(audio.byteLength / 1024).toFixed(1)}kb in ${Date.now() - startTime}ms`)
+
+  if (sendText) {
+    const textMsg = JSON.stringify({ type: 'tts-text', text: sendText })
+    for (const client of clients) {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(textMsg)
+      }
+    }
+  }
+
+  let sent = false
+  for (const client of clients) {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(audio)
+      sent = true
+      const pending = pendingTtsByClient.get(client) ?? new Set()
+      pendingTtsByClient.set(client, pending)
+      pending.add(hash)
+    }
+  }
+
+  if (!cached && sent && params.courseId && hash) {
+    await new Promise(resolve => setTimeout(resolve, 0))
+    if (hasPendingTtsHash(clients, hash)) {
+      await fetch('http://api:3001/internal/tts/cache/commit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ courseId: params.courseId, hash }),
+      }).catch(() => {})
+    }
+  }
+}
 
 const server = Bun.serve({
   port: 3002,
@@ -33,6 +103,7 @@ const server = Bun.serve({
         sessions.set(sessionId, new Set())
       }
       sessions.get(sessionId)!.add(ws)
+      pendingTtsByClient.set(ws, new Set())
       console.log(`client connected to session ${sessionId}`)
     },
     async message(ws, message) {
@@ -66,32 +137,15 @@ const server = Bun.serve({
       }
 
       if (parsed.type === 'tts-request') {
-        console.log(`[session ${sessionId}] tts-request: text=${(parsed.text || '').slice(0, 50)}..., voice=${parsed.voice}, speed=${parsed.speed ?? 1}`)
+        console.log(`[session ${sessionId}] tts-request: text=${(parsed.text || '').slice(0, 50)}..., voice=${parsed.voice}, model=${parsed.model}, speed=${parsed.speed ?? 1}`)
         try {
-          const startTime = Date.now()
-          const res = await fetch('http://api:3001/internal/tts/synthesize', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              text: parsed.text,
-              voice: parsed.voice,
-              speed: parsed.speed ?? 1,
-            }),
-          })
-          if (!res.ok) {
-            console.log(`[session ${sessionId}] tts-error: status=${res.status}`)
-            ws.send(JSON.stringify({ type: 'tts-error', payload: `TTS failed: ${res.status}` }))
-            return
-          }
-          const audio = await res.arrayBuffer()
-          console.log(`[session ${sessionId}] tts-response: ${(audio.byteLength / 1024).toFixed(1)}kb in ${Date.now() - startTime}ms`)
-          const textMsg = JSON.stringify({ type: 'tts-text', text: parsed.text })
-          for (const client of clients) {
-            if (client.readyState === WebSocket.OPEN) {
-              client.send(textMsg)
-              client.send(audio)
-            }
-          }
+          await synthesizeAndBroadcastTts(sessionId, {
+            text: parsed.text,
+            voice: parsed.voice,
+            model: parsed.model,
+            speed: parsed.speed ?? 1,
+            courseId: parsed.courseId,
+          }, clients, parsed.text)
         } catch (e: any) {
           ws.send(JSON.stringify({ type: 'tts-error', payload: e.message || 'TTS failed' }))
         }
@@ -144,22 +198,16 @@ const server = Bun.serve({
 
           // If TTS voice is configured, synthesize and broadcast audio
           if (parsed.voice) {
-            const ttsRes = await fetch('http://api:3001/internal/tts/synthesize', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
+            try {
+              await synthesizeAndBroadcastTts(sessionId, {
                 text: replyText,
                 voice: parsed.voice,
+                model: parsed.model,
                 speed: parsed.speed ?? 1,
-              }),
-            })
-            if (ttsRes.ok) {
-              const audio = await ttsRes.arrayBuffer()
-              for (const client of clients) {
-                if (client.readyState === WebSocket.OPEN) {
-                  client.send(audio)
-                }
-              }
+                courseId: parsed.courseId,
+              }, clients)
+            } catch (e: any) {
+              console.log(`[session ${sessionId}] tts-error: ${e.message || 'TTS failed'}`)
             }
           }
         } catch (e: any) {
@@ -170,6 +218,7 @@ const server = Bun.serve({
     },
     close(ws) {
       const sessionId = ws.data.sessionId
+      pendingTtsByClient.delete(ws)
       const clients = sessions.get(sessionId)
       if (clients) {
         clients.delete(ws)

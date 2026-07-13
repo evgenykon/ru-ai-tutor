@@ -1,4 +1,5 @@
 import { FastifyRequest, FastifyReply } from 'fastify'
+import fs from 'fs'
 import path from 'path'
 import { randomUUID } from 'crypto'
 
@@ -23,7 +24,7 @@ export async function uploadFile(request: FastifyRequest, reply: FastifyReply) {
   }
   const buffer = Buffer.concat(chunks)
 
-  await Bun.write(filepath, buffer)
+  await fs.promises.writeFile(filepath, buffer)
 
   return { url: `/api/uploads/${filename}`, filename }
 }

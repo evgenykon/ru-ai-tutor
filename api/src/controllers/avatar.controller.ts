@@ -1,5 +1,3 @@
-import { FastifyRequest } from 'fastify'
-
 const avatars = [
   { id: 'male-01', name: 'Образ 1', gender: 'male', url: '/images/avatars/male-01-base.jpg' },
   { id: 'male-02', name: 'Образ 2', gender: 'male', url: '/images/avatars/male-02-base.jpg' },

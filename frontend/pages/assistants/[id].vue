@@ -164,6 +164,7 @@
 
     <div class="bottom-actions">
       <div v-if="saveError" class="save-error">{{ saveError }}</div>
+      <div class="course-count">Курсов: {{ courseCount }}</div>
       <button :disabled="!hasChanges || saving" class="save-btn" @click="save">{{ saving ? 'Сохранение...' : 'Сохранить' }}</button>
       <button class="back-btn" @click="router.push('/assistants')">Назад</button>
     </div>
@@ -209,6 +210,7 @@ const error = ref('')
 const saveError = ref('')
 const ttsTesting = ref(false)
 const activateError = ref('')
+const courseCount = ref(0)
 const activePicker = ref<'llm' | 'tts' | null>(null)
 const modelDisplay = ref('')
 const allModels = ref<{ id: string; name: string; service: string }[]>([])
@@ -400,9 +402,10 @@ const hasChanges = computed(() => {
     || original.value.service !== assistant.value.service
 })
 
-async function fetchAssistant() {
+  async function fetchAssistant() {
   try {
     const { data } = await $api.get(`/assistants/${route.params.id}`)
+    courseCount.value = data.courseCount ?? 0
     assistant.value = { ...data.assistant, speechRate: data.assistant.speechRate ?? 1.0, ttsModel: data.assistant.ttsModel || '', service: data.assistant.service || 'open-router', silenceVideo: data.assistant.silenceVideo || null, talkVideo: data.assistant.talkVideo || null, praiseVideo: data.assistant.praiseVideo || null, denialVideo: data.assistant.denialVideo || null }
     if (data.assistant.model) {
       const { data: modelsData } = await $api.get('/yandex-models')
@@ -452,7 +455,7 @@ async function save() {
 }
 
 async function testTts() {
-  if (!assistant.value?.ttsVoice) return
+  if (!assistant.value?.ttsVoice || !assistant.value?.ttsModel) return
   ttsTesting.value = true
   try {
     const res = await fetch('/api/tts/synthesize', {
@@ -462,6 +465,7 @@ async function testTts() {
       body: JSON.stringify({
         text: 'Привет, я ваш ассистент.',
         voice: assistant.value.ttsVoice,
+        model: assistant.value.ttsModel,
         speed: assistant.value.speechRate ?? 1,
       }),
     })
@@ -812,5 +816,11 @@ fetchAssistant()
   height: 100%;
   display: block;
   object-fit: contain;
+}
+
+.course-count {
+  font-size: 0.8125rem;
+  color: #64748b;
+  margin-right: auto;
 }
 </style>

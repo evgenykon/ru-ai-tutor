@@ -81,7 +81,7 @@
           <div v-if="m.context" class="chat-msg-context">
             Модуль {{ m.context.module }} · Урок {{ m.context.lesson }} · Шаг {{ m.context.step }}
           </div>
-          <div class="chat-bubble">{{ m.text }}</div>
+          <div class="chat-bubble" v-html="renderMd(m.text)" />
         </div>
       </div>
       <form class="chat-input-row" @submit.prevent="sendChatMessage">
@@ -261,7 +261,7 @@ function tickVolume() {
   micAnalyser.getByteTimeDomainData(data)
   let sum = 0
   for (let i = 0; i < data.length; i++) {
-    const v = (data[i] - 128) / 128
+    const v = ((data[i] ?? 128) - 128) / 128
     sum += v * v
   }
   micVolume.value = Math.min(1, Math.sqrt(sum / data.length) * 3)
@@ -396,7 +396,9 @@ function sendChatMessage() {
     text,
     assistantId: a?.id,
     voice: a?.ttsVoice || undefined,
+    model: a?.ttsModel,
     speed: a?.speechRate ?? 1,
+    courseId: session.value?.course?.id,
   }))
   chatInput.value = ''
 }
@@ -436,7 +438,9 @@ function pushToTalkEnd() {
       text,
       assistantId: a?.id,
       voice: a?.ttsVoice || undefined,
+      model: a?.ttsModel,
       speed: a?.speechRate ?? 1,
+      courseId: session.value?.course?.id,
     }))
   }
   chatInput.value = ''
@@ -506,7 +510,7 @@ function advanceStep() {
 
 function playTts() {
   const a = assistant.value
-  if (!ws || ws.readyState !== WebSocket.OPEN || !a?.ttsVoice || !currentStep.value?.assistantText) return
+  if (!ws || ws.readyState !== WebSocket.OPEN || !a?.ttsVoice || !a?.ttsModel || !currentStep.value?.assistantText) return
 
   stopTts()
 
@@ -514,7 +518,9 @@ function playTts() {
     type: 'tts-request',
     text: currentStep.value.assistantText,
     voice: a.ttsVoice,
+    model: a.ttsModel,
     speed: a.speechRate ?? 1,
+    courseId: session.value?.course?.id,
   }))
 }
 
@@ -1042,6 +1048,17 @@ fetchSession()
 .chat-msg.user .chat-bubble { background: #2563eb; color: white; border-bottom-right-radius: 4px; }
 .chat-msg.assistant .chat-bubble { background: #f1f5f9; color: #1e293b; border-bottom-left-radius: 4px; }
 
+.chat-bubble p { margin: 0 0 0.35rem; }
+.chat-bubble p:last-child { margin-bottom: 0; }
+.chat-bubble strong { font-weight: 700; }
+.chat-bubble em { font-style: italic; }
+.chat-bubble ul { list-style-type: disc; padding-left: 1rem; margin: 0.35rem 0; }
+.chat-bubble ol { list-style-type: decimal; padding-left: 1rem; margin: 0.35rem 0; }
+.chat-bubble li { margin-bottom: 0.15rem; }
+.chat-bubble code { background: rgba(0,0,0,0.1); padding: 0.1rem 0.25rem; border-radius: 3px; font-size: 0.85em; }
+.chat-msg.user .chat-bubble code { background: rgba(255,255,255,0.25); }
+.chat-msg.user .chat-bubble a { color: #bfdbfe; }
+
 .chat-input-row {
   display: flex;
   gap: 0.5rem;
@@ -1093,42 +1110,16 @@ fetchSession()
 .chat-send-btn:disabled { opacity: 0.4; cursor: default; }
 
 .slide-text {
-  font-size: 0.9rem;
+  font-size: 1rem;
   color: #334155;
-  line-height: 1.8;
+  line-height: 1.7;
   max-width: 100%;
   text-align: left;
   padding: 1rem;
   overflow-y: auto;
   flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.slide-text h1, .slide-text h2, .slide-text h3, .slide-text h4 {
-  color: #1e293b;
-  font-weight: 600;
-}
-
-.slide-text h1 { font-size: 1.3rem; margin-top: 0.25rem; }
-.slide-text h2 { font-size: 1.15rem; margin-top: 0.5rem; }
-.slide-text h3 { font-size: 1rem; }
-
-.slide-text ul, .slide-text ol {
-  text-align: left;
-  padding-left: 1.5rem;
-}
-
-.slide-text li { margin-bottom: 0.35rem; }
-
-.slide-text strong { font-weight: 700; color: #1e293b; }
-.slide-text em { font-style: italic; }
-.slide-text code {
-  background: #f1f5f9;
-  padding: 0.15rem 0.3rem;
-  border-radius: 3px;
-  font-size: 0.85em;
+  display: block;
+  min-height: 0;
 }
 
 .slide-image {
@@ -1217,4 +1208,57 @@ fetchSession()
 .step-progress-item.completed .step-progress-title { color: #16a34a; }
 
 .loading { color: #6b7280; padding: 2rem; font-size: 0.875rem; }
+</style>
+
+<style>
+/* Global markdown styles for slide content rendered via v-html */
+.slide-text > * { margin: 0 0 0.75rem; }
+
+.slide-text h1, .slide-text h2, .slide-text h3, .slide-text h4 {
+  color: #0f172a;
+  font-weight: 700;
+  line-height: 1.3;
+  margin: 0 0 0.75rem;
+}
+
+.slide-text h1 { font-size: 1.6rem; }
+.slide-text h2 { font-size: 1.35rem; }
+.slide-text h3 { font-size: 1.15rem; }
+.slide-text h4 { font-size: 1rem; }
+
+.slide-text ul, .slide-text ol {
+  padding-left: 1.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.slide-text ul { list-style-type: disc; }
+.slide-text ol { list-style-type: decimal; }
+
+.slide-text li { margin-bottom: 0.35rem; }
+
+.slide-text strong { font-weight: 700; color: #0f172a; }
+.slide-text em { font-style: italic; }
+.slide-text code {
+  background: #f1f5f9;
+  padding: 0.15rem 0.3rem;
+  border-radius: 4px;
+  font-size: 0.85em;
+  font-family: monospace;
+}
+
+.slide-text blockquote {
+  border-left: 4px solid #93c5fd;
+  padding: 0.5rem 1rem;
+  background: #eff6ff;
+  color: #1e40af;
+  border-radius: 0 4px 4px 0;
+  margin-bottom: 0.75rem;
+}
+
+.slide-text p:last-child,
+.slide-text ul:last-child,
+.slide-text ol:last-child,
+.slide-text blockquote:last-child {
+  margin-bottom: 0;
+}
 </style>

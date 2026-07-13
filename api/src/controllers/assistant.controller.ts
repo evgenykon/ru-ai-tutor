@@ -1,9 +1,10 @@
 import { FastifyRequest, FastifyReply } from 'fastify'
 import { prisma } from '../db'
+import { deleteCourseTtsCache } from '../services/tts.service'
 
 export async function list(request: FastifyRequest) {
   const isAdmin = request.user!.email === 'admin@admin.com'
-  const where = isAdmin ? {} : {}
+  const where: any = {}
   if (!isAdmin) {
     const userAssistantIds = await prisma.userAssistant.findMany({
       where: { userId: request.user!.userId },
@@ -19,9 +20,12 @@ export async function list(request: FastifyRequest) {
 export async function getById(request: FastifyRequest, reply: FastifyReply) {
   const { id } = request.params as { id: string }
   const isAdmin = request.user!.email === 'admin@admin.com'
-  const item = await prisma.assistant.findFirst({ where: { id, ...(isAdmin ? {} : { users: { some: { userId: request.user!.userId } } }) } })
+  const item = await prisma.assistant.findFirst({
+    where: { id, ...(isAdmin ? {} : { users: { some: { userId: request.user!.userId } } }) },
+    include: { _count: { select: { courses: true } } },
+  })
   if (!item) return reply.status(404).send({ error: 'Not found' })
-  return { assistant: item }
+  return { assistant: item, courseCount: item._count.courses }
 }
 
 export async function create(request: FastifyRequest, reply: FastifyReply) {
@@ -92,6 +96,11 @@ export async function update(request: FastifyRequest, reply: FastifyReply) {
   const existing = await prisma.assistant.findFirst({ where: { id, ...(isAdmin ? {} : { users: { some: { userId: request.user!.userId } } }) } })
   if (!existing) return reply.status(404).send({ error: 'Not found' })
 
+  const ttsModelChanged = body.ttsModel !== undefined && body.ttsModel !== existing.ttsModel
+  const ttsVoiceChanged = body.ttsVoice !== undefined && body.ttsVoice !== existing.ttsVoice
+  const speechRateChanged = body.speechRate !== undefined && body.speechRate !== existing.speechRate
+  const ttsSettingsChanged = ttsModelChanged || ttsVoiceChanged || speechRateChanged
+
   const item = await prisma.assistant.update({
     where: { id },
     data: {
@@ -111,6 +120,11 @@ export async function update(request: FastifyRequest, reply: FastifyReply) {
       ...(body.service !== undefined && { service: body.service }),
     },
   })
+
+  if (ttsSettingsChanged) {
+    const courses = await prisma.course.findMany({ where: { assistantId: id }, select: { id: true } })
+    await Promise.all(courses.map(c => deleteCourseTtsCache(c.id).catch(() => {})))
+  }
 
   return { assistant: item }
 }

@@ -25,6 +25,11 @@
             <polygon points="6 3 20 12 6 21 6 3" />
           </svg>
         </button>
+        <button v-if="isAdmin" class="session-delete" title="Удалить" @click="deleteSession(s.id)">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+            <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6h14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
       </div>
     </div>
   </div>
@@ -35,9 +40,12 @@ definePageMeta({ middleware: 'auth', layout: 'default' })
 
 const { $api } = useNuxtApp()
 const router = useRouter()
+const authStore = useAuthStore()
 
 const sessions = ref<any[]>([])
 const loading = ref(true)
+
+const isAdmin = computed(() => authStore.user?.email === 'admin@admin.com')
 
 function formatDate(date: string) {
   return new Date(date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
@@ -45,6 +53,16 @@ function formatDate(date: string) {
 
 function goToSession(id: string) {
   router.push(`/session/${id}`)
+}
+
+async function deleteSession(id: string) {
+  if (!confirm('Удалить сессию?')) return
+  try {
+    await $api.delete(`/sessions/${id}`)
+    sessions.value = sessions.value.filter(s => s.id !== id)
+  } catch {
+    alert('Ошибка удаления сессии')
+  }
 }
 
 async function fetchSessions() {
@@ -127,5 +145,25 @@ h1 { margin-bottom: 1rem; }
 .session-continue:hover {
   background: #eff6ff;
   border-color: #93c5fd;
+}
+
+.session-delete {
+  width: 44px;
+  height: 44px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+  color: #dc2626;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.1s, border-color 0.1s;
+}
+
+.session-delete:hover {
+  background: #fef2f2;
+  border-color: #fca5a5;
 }
 </style>

@@ -1,5 +1,6 @@
 import { FastifyRequest, FastifyReply } from 'fastify'
 import { prisma } from '../db'
+import { deleteCourseTtsCache } from '../services/tts.service'
 
 export async function list(request: FastifyRequest) {
   const query = request.query as { page?: string; limit?: string; archived?: string; status?: string; q?: string }
@@ -8,7 +9,7 @@ export async function list(request: FastifyRequest) {
   const skip = (page - 1) * limit
   const isAdmin = request.user!.email === 'admin@admin.com'
 
-  let where: any = {}
+  const where: any = {}
   if (!isAdmin) {
     const userCourseIds = await prisma.userCourse.findMany({
       where: { userId: request.user!.userId },
@@ -19,7 +20,9 @@ export async function list(request: FastifyRequest) {
   }
 
   if (query.archived === 'true') where.archived = true
-  else if (query.archived === 'all') {}
+  else if (query.archived === 'all') {
+    // no archived filter
+  }
   else where.archived = false
 
   if (query.status === 'published') where.active = true
@@ -91,6 +94,7 @@ export async function update(request: FastifyRequest, reply: FastifyReply) {
   const effectiveActive = body.active !== undefined ? body.active : existing.active
   const effectiveSlug = body.slug !== undefined ? body.slug : existing.slug
   const effectiveAssistantId = body.assistantId !== undefined ? body.assistantId : existing.assistantId
+  const assistantChanged = body.assistantId !== undefined && body.assistantId !== existing.assistantId
   if (effectiveActive) {
     if (!effectiveSlug) return reply.status(400).send({ error: 'slug is required for publishing' })
     if (!effectiveAssistantId) return reply.status(400).send({ error: 'assistant is required for publishing' })
@@ -116,6 +120,11 @@ export async function update(request: FastifyRequest, reply: FastifyReply) {
       assistant: true,
     },
   })
+
+  if (assistantChanged) {
+    await deleteCourseTtsCache(id).catch(() => {})
+  }
+
   return { course: item }
 }
 
@@ -131,5 +140,6 @@ export async function remove(request: FastifyRequest, reply: FastifyReply) {
   const existing = await prisma.course.findFirst({ where: { id, ...(isAdmin ? {} : { users: { some: { userId: request.user!.userId } } }) } })
   if (!existing) return reply.status(404).send({ error: 'Not found' })
   await prisma.course.delete({ where: { id } })
+  await deleteCourseTtsCache(id).catch(() => {})
   return { success: true }
 }

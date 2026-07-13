@@ -287,7 +287,8 @@ async function fetchModels() {
     if (saved && models.value.some(m => m.id === saved)) {
       selectedModel.value = saved
     } else if (models.value.length) {
-      selectedModel.value = models.value[0].id
+      const first = models.value[0]
+      if (first) selectedModel.value = first.id
     }
   } catch { /* ignore */ }
 }
@@ -315,7 +316,7 @@ function parseJsonCommands(text: string) {
   const codeMatches = text.matchAll(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/g)
   for (const m of codeMatches) {
     try {
-      const parsed = JSON.parse(m[1].trim())
+      const parsed = JSON.parse(m[1]?.trim() || '')
       if (Array.isArray(parsed)) {
         for (const item of parsed) {
           if (item?.action) results.push(item)

@@ -104,12 +104,6 @@ async function openCreate() {
   showForm.value = true
 }
 
-async function openEdit(item: any) {
-  editing.value = item
-  form.name = item.name
-  showForm.value = true
-}
-
 async function save() {
   if (!form.name) return
 

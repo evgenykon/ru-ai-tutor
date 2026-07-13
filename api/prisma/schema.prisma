@@ -85,6 +85,7 @@ model Course {
   modules     Module[]
   sessions    Session[]
   users       UserCourse[]
+  ttsCaches   TtsCache[]
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
 
@@ -223,4 +224,26 @@ model UserAssistant {
 
   @@id([userId, assistantId])
   @@map("user_assistants")
+}
+
+model TtsCache {
+  id         String   @id @default(cuid())
+  courseId   String   @map("course_id")
+  hash       String
+  model      String
+  voice      String
+  speed      Float
+  text       String
+  filePath   String   @map("file_path")
+  fileSize   Int      @map("file_size")
+  hitCount   Int      @default(0) @map("hit_count")
+  protected  Boolean  @default(false)
+  lastHitAt  DateTime @default(now()) @map("last_hit_at")
+  course     Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([courseId, hash])
+  @@index([courseId])
+  @@map("tts_caches")
 }

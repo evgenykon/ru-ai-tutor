@@ -1,4 +1,4 @@
-import { FastifyRequest, FastifyReply } from 'fastify'
+import { FastifyRequest } from 'fastify'
 import { prisma } from '../db'
 
 export async function list(request: FastifyRequest) {
